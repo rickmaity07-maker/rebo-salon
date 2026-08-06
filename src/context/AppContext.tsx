@@ -3,17 +3,19 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Language = 'de' | 'en';
 type Theme = 'modern' | 'heritage';
-type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth';
+// ADDED 'profile' TO PAGES
+type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
 export type User = {
   id: string;
   name: string;
   email: string;
   phone: string;
-  haircutCount: number; // For the Loyalty System
+  haircutCount: number;
 };
 
-export type Appointment = { id: string; userId: string; name: string; phone: string; service: string; stylist: string; date: string; time: string; status: 'pending' | 'confirmed' | 'cancelled'; sendsms: boolean; usedReward: boolean };
+// ADDED 'notes' field for specific trimming details
+export type Appointment = { id: string; userId: string; name: string; phone: string; service: string; stylist: string; date: string; time: string; status: 'pending' | 'confirmed' | 'cancelled'; sendsms: boolean; usedReward: boolean; notes?: string; };
 export type ServiceItem = { id: string; name: string; price: string; oldPrice: string };
 export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
 export type Notification = { id: number; message: string; type: 'success' | 'info' };
@@ -53,13 +55,15 @@ const initialProducts: ProductItem[] = [
   { id: 'p2', name: "Matte Styling Clay", price: "19,90 €", desc: "Starker Halt, natürlicher Look", image: "https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80" },
 ];
 
+// Added a past historical appointment for the demo user with specific notes
 const initialAppointments: Appointment[] = [
-  { id: 'a1', userId: 'u1', name: "Max Mustermann", phone: "0151 1234567", service: "Haarschnitt & Bart", stylist: "Rebo", date: "2026-08-10", time: "10:00", status: "pending", sendsms: true, usedReward: false }
+  { id: 'a0', userId: 'demo_user', name: "Demo User", phone: "0151 9876543", service: "Haarschnitt & Bart", stylist: "Rebo", date: "2026-06-15", time: "14:00", status: "confirmed", sendsms: true, usedReward: false, notes: "Seiten auf Kontur (3mm), oben leicht texturiert. Bart spitz zulaufend, Wangen sauber rasiert." },
+  { id: 'a1', userId: 'u1', name: "Max Mustermann", phone: "0151 1234567", service: "Herren Haarschnitt", stylist: "Anna", date: "2026-08-10", time: "10:00", status: "pending", sendsms: true, usedReward: false }
 ];
 
 const translations = {
   de: {
-    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen" },
+    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" },
     hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." },
     features: [
       { title: "Premium Produkte", desc: "Exklusive Pflegeprodukte für Haar und Bart." },
@@ -100,10 +104,15 @@ const translations = {
       submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir bestätigen Ihren Termin in Kürze.",
       noSlots: "Heute keine Termine mehr frei."
     },
+    profile: {
+      title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!",
+      historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen für Ihren Look:",
+      noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern"
+    },
     promo: "Schüler- & Studentenangebot (Dienstag): 16 €",
   },
   en: {
-    nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now" },
+    nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "My Profile" },
     hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." },
     features: [
       { title: "Premium Products", desc: "Exclusive care products for your hair and beard." },
@@ -144,6 +153,11 @@ const translations = {
       submit: "Confirm Booking", success: "Request sent! We will confirm your appointment shortly.",
       noSlots: "No slots available today."
     },
+    profile: {
+      title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!",
+      historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes for your look:",
+      noHistory: "No appointments yet.", saveNote: "Save Note"
+    },
     promo: "Student Special (Tuesday): 16 €",
   }
 };
@@ -156,7 +170,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [page, setPageState] = useState<Page>('home');
   
   const [isAdminAuth, setIsAdminAuth] = useState(false);
-  // NEW: User Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [servicesDB, setServicesDB] = useState<ServiceItem[]>(initialServices);
@@ -182,7 +195,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as Page;
-      if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin', 'auth'].includes(hash)) {
+      if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin', 'auth', 'profile'].includes(hash)) {
         setPageState(hash);
       } else {
         setPageState('home');
@@ -195,8 +208,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setPage = (newPage: Page) => {
     if (newPage !== page) {
-      // If trying to access booking without login, redirect to Auth
       if (newPage === 'booking' && !currentUser) {
+        window.history.pushState(null, '', '#auth');
+        setPageState('auth');
+        return;
+      }
+      if (newPage === 'profile' && !currentUser) {
         window.history.pushState(null, '', '#auth');
         setPageState('auth');
         return;

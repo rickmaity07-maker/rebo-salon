@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { AppProvider, useApp, TimeSlot, ServiceItem, ProductItem } from '../context/AppContext';
+import { AppProvider, useApp, TimeSlot, ServiceItem, ProductItem, Appointment } from '../context/AppContext';
 
 // --- NAVBAR ---
 function Navbar() {
@@ -13,7 +13,8 @@ function Navbar() {
     setMobileMenuOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setCurrentUser(null);
     setPage('home');
     addNotification(lang === 'de' ? 'Erfolgreich abgemeldet' : 'Successfully logged out', 'info');
@@ -57,9 +58,13 @@ function Navbar() {
           {/* User Status / Login */}
           {currentUser ? (
              <div className="flex items-center gap-4 ml-2">
-               <div className="flex flex-col text-right">
-                 <span className={`text-xs font-bold ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.name}</span>
-                 <span className="text-[10px] text-gray-400">{currentUser.haircutCount}/10 Loyalty Points</span>
+               {/* Clickable Profile Badge */}
+               <div 
+                 onClick={() => setPage('profile')}
+                 className={`flex flex-col text-right cursor-pointer group px-3 py-1.5 rounded-sm transition-colors ${page === 'profile' ? (isHeritage ? 'bg-[#c5a059]/10' : 'bg-[#d4af37]/10') : 'hover:bg-white/5'}`}
+               >
+                 <span className={`text-xs font-bold group-hover:underline ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.name}</span>
+                 <span className="text-[10px] text-gray-400">{currentUser.haircutCount}/10 Points</span>
                </div>
                <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 transition-colors uppercase font-bold">Logout</button>
              </div>
@@ -102,11 +107,11 @@ function Navbar() {
           
           {currentUser ? (
             <div className="pt-4 border-t border-gray-800 flex justify-between items-center">
-              <div>
-                <p className="text-sm font-bold text-white">{currentUser.name}</p>
-                <p className={`text-xs ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
+              <div onClick={() => navigateTo('profile')} className="cursor-pointer">
+                <p className="text-sm font-bold text-white underline">{t.profile.title}</p>
+                <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
               </div>
-              <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
+              <button onClick={(e) => { handleLogout(e); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
             </div>
           ) : (
             <button onClick={() => navigateTo('auth')} className={`block w-full mt-4 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
@@ -121,12 +126,292 @@ function Navbar() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-100 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-[100] flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
         <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- USER PROFILE & CRM VIEW ---
+function ProfileView() {
+  const { t, theme, currentUser, appointments } = useApp();
+  const isHeritage = theme === 'heritage';
+  const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
+  const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
+
+  if (!currentUser) return null;
+
+  const userAppointments = appointments.filter(a => a.userId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const upcoming = userAppointments.filter(a => a.status === 'pending');
+  const past = userAppointments.filter(a => a.status === 'confirmed');
+
+  return (
+    <div className="min-h-screen pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
+      <div className="mb-12 text-center md:text-left">
+         <h2 className={`text-4xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
+         <p className="text-gray-400 text-sm md:text-base">Welcome back, {currentUser.name}</p>
+      </div>
+
+      <div className={`p-8 mb-10 border rounded-sm shadow-xl ${bgBorder}`}>
+        <h3 className="text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
+        <p className="text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
+        
+        {/* Loyalty Progress Bar */}
+        <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+          <div 
+            className={`h-full transition-all duration-1000 ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`} 
+            style={{ width: `${(currentUser.haircutCount / 10) * 100}%` }}
+          />
+        </div>
+        <p className={`text-right mt-2 text-sm font-bold ${primaryColor}`}>{currentUser.haircutCount} / 10</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        <div>
+          <h3 className="text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
+          <div className="space-y-4">
+            {upcoming.map(a => (
+              <div key={a.id} className={`p-6 border rounded-sm flex justify-between items-center ${bgBorder}`}>
+                <div>
+                  <p className="font-bold text-lg">{a.service}</p>
+                  <p className="text-sm text-gray-400">{a.date} at {a.time} with {a.stylist}</p>
+                </div>
+                <span className="text-xs uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">Pending</span>
+              </div>
+            ))}
+            {upcoming.length === 0 && <p className="text-gray-500 text-sm">{t.profile.noHistory}</p>}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
+          <div className="space-y-4">
+            {past.map(a => (
+              <div key={a.id} className={`p-6 border rounded-sm ${bgBorder}`}>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="font-bold text-lg">{a.service}</p>
+                    <p className="text-sm text-gray-400">{a.date} with {a.stylist}</p>
+                  </div>
+                  <span className="text-xs uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Completed</span>
+                </div>
+                
+                {/* Stylist Notes displayed to user */}
+                <div className="mt-4 p-4 bg-black/40 border border-white/5 rounded-sm">
+                  <h4 className={`text-xs uppercase font-bold tracking-widest mb-2 ${primaryColor}`}>{t.profile.notesLabel}</h4>
+                  <p className="text-sm text-gray-300 leading-relaxed italic">
+                    "{a.notes ? a.notes : 'Keine spezifischen Details hinterlegt.'}"
+                  </p>
+                </div>
+              </div>
+            ))}
+            {past.length === 0 && <p className="text-gray-500 text-sm">{t.profile.noHistory}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// --- ADMIN DASHBOARD ---
+function AdminView() {
+  const { isAdminAuth, setIsAdminAuth, appointments, setAppointments, servicesDB, setServicesDB, productsDB, setProductsDB, addNotification, theme, t } = useApp();
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [tab, setTab] = useState<'appointments' | 'services' | 'products'>('appointments');
+  const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
+  
+  const isHeritage = theme === 'heritage';
+  const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
+  const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user === 'admin' && pass === 'rebo123') {
+      setIsAdminAuth(true);
+      addNotification("Admin Login Successful", 'success');
+    } else {
+      alert("Invalid credentials. Try admin / rebo123");
+    }
+  };
+
+  const handleConfirm = (id: string, sendsms: boolean) => {
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'confirmed' } : a));
+    addNotification(`Reservation Confirmed! ${sendsms ? 'SMS sent to customer.' : ''}`, 'success');
+  };
+
+  const handleCancel = (id: string) => {
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' } : a));
+    addNotification("Reservation Cancelled.", 'info');
+  };
+
+  const handleSaveNotes = (id: string) => {
+    const note = editingNotes[id];
+    if(note !== undefined) {
+      setAppointments(prev => prev.map(a => a.id === id ? { ...a, notes: note } : a));
+      addNotification("Stylist notes saved to customer profile.", "success");
+    }
+  };
+
+  const handleAddProduct = (e: any) => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const price = e.target.price.value;
+    const desc = e.target.desc.value;
+    const file = e.target.image.files[0];
+    const imageUrl = file ? URL.createObjectURL(file) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80';
+    
+    setProductsDB(prev => [...prev, { id: Date.now().toString(), name, price, desc, image: imageUrl }]);
+    addNotification("Product added to Store!", 'success');
+    e.target.reset();
+  };
+
+  const handleAddService = (e: any) => {
+    e.preventDefault();
+    setServicesDB(prev => [...prev, { id: Date.now().toString(), name: e.target.name.value, price: e.target.price.value, oldPrice: e.target.oldPrice.value }]);
+    addNotification("Service added!", 'success');
+    e.target.reset();
+  };
+
+  if (!isAdminAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-28 px-4">
+        <form onSubmit={handleLogin} className={`p-8 md:p-10 border rounded-sm w-full max-w-md shadow-2xl ${bgBorder}`}>
+          <h2 className={`text-2xl font-bold mb-6 text-center ${primaryColor}`}>Admin Portal</h2>
+          <input required type="text" placeholder="Username" value={user} onChange={e=>setUser(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm mb-4 outline-none text-white text-base" />
+          <input required type="password" placeholder="Password" value={pass} onChange={e=>setPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm mb-6 outline-none text-white text-base" />
+          <button type="submit" className={`w-full py-4 font-bold uppercase tracking-widest text-sm text-black transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>Login</button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
+        <h2 className={`text-2xl md:text-3xl font-bold uppercase tracking-widest ${primaryColor}`}>Dashboard</h2>
+        <button onClick={() => setIsAdminAuth(false)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 px-2 py-2">Logout</button>
+      </div>
+
+      <div className="flex gap-2 md:gap-4 mb-8 overflow-x-auto pb-2">
+        {['appointments', 'services', 'products'].map((t) => (
+          <button key={t} onClick={() => setTab(t as any)} className={`px-5 py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold rounded-sm transition-colors whitespace-nowrap ${tab === t ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'appointments' && (
+        <div className={`p-4 md:p-6 border rounded-sm ${bgBorder}`}>
+          <h3 className="text-lg md:text-xl font-bold mb-6">Reservation Management</h3>
+          <div className="space-y-6">
+            {/* Sorting appointments to show newest first */}
+            {appointments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(a => (
+              <div key={a.id} className="bg-black/50 p-4 md:p-6 border border-white/10 flex flex-col gap-4 rounded-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <p className="font-bold text-base md:text-lg">{a.name} <span className="text-sm text-gray-400 font-normal">({a.phone})</span></p>
+                    <p className="text-sm text-gray-300">{a.service} {a.usedReward && <span className="text-green-400 font-bold ml-2">(Used 50% Reward)</span>}</p>
+                    <p className="text-sm text-gray-300">Stylist: {a.stylist} — {a.date} at {a.time}</p>
+                    <p className={`text-xs mt-2 border inline-block px-2 py-1 rounded ${a.sendsms ? 'border-green-500/50 text-green-400' : 'border-red-500/50 text-red-400'}`}>
+                      {a.sendsms ? 'SMS Reminder Requested' : 'No SMS Requested'}
+                    </p>
+                    <p className={`text-sm mt-3 font-bold ${a.status === 'confirmed' ? 'text-green-400' : a.status === 'cancelled' ? 'text-red-400' : 'text-yellow-400'}`}>
+                      Status: {a.status.toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                    {a.status === 'pending' && (
+                      <>
+                        <button onClick={() => handleConfirm(a.id, a.sendsms)} className="flex-1 md:flex-none bg-green-600/20 text-green-400 border border-green-600 px-4 py-3 text-xs font-bold uppercase hover:bg-green-600 hover:text-white transition-colors rounded-sm">Confirm</button>
+                        <button onClick={() => handleCancel(a.id)} className="flex-1 md:flex-none bg-red-600/20 text-red-400 border border-red-600 px-4 py-3 text-xs font-bold uppercase hover:bg-red-600 hover:text-white transition-colors rounded-sm">Reject</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Admin Note Section for Confirmed Cuts */}
+                {a.status === 'confirmed' && (
+                  <div className="mt-2 pt-4 border-t border-gray-800">
+                    <label className="block text-xs uppercase text-gray-400 mb-2">Stylist CRM Notes (Visible to Client)</label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input 
+                        type="text" 
+                        value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')}
+                        onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})}
+                        placeholder="e.g., Skin fade sides, 3mm top..." 
+                        className="flex-1 bg-[#1a1a1a] border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
+                      />
+                      <button onClick={() => handleSaveNotes(a.id)} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] text-black hover:bg-white' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
+                        {t.profile.saveNote}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {appointments.length === 0 && <p className="text-gray-500 text-sm py-4">No appointments found.</p>}
+          </div>
+        </div>
+      )}
+
+      {tab === 'services' && (
+        <div className="grid lg:grid-cols-2 gap-8">
+          <div className={`p-6 border rounded-sm ${bgBorder}`}>
+            <h3 className="text-lg md:text-xl font-bold mb-4">Add Service</h3>
+            <form onSubmit={handleAddService} className="space-y-4">
+              <input required name="name" type="text" placeholder="Service Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+              <div className="grid grid-cols-2 gap-4">
+                <input required name="price" type="text" placeholder="Price (30 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+                <input required name="oldPrice" type="text" placeholder="Old Price" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+              </div>
+              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Add Service</button>
+            </form>
+          </div>
+          <div className="space-y-3">
+            {servicesDB.map((s: ServiceItem) => (
+              <div key={s.id} className={`p-5 flex justify-between items-center border rounded-sm text-base ${bgBorder}`}>
+                <span>{s.name} <span className={primaryColor}>({s.price})</span></span>
+                <button onClick={() => { setServicesDB(prev => prev.filter(x => x.id !== s.id)); addNotification("Service Deleted", "info"); }} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'products' && (
+        <div className="grid lg:grid-cols-2 gap-8">
+          <div className={`p-6 border rounded-sm ${bgBorder}`}>
+            <h3 className="text-lg md:text-xl font-bold mb-4">Add Product</h3>
+            <form onSubmit={handleAddProduct} className="space-y-4">
+              <input required name="name" type="text" placeholder="Product Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+              <input required name="desc" type="text" placeholder="Description" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+              <input required name="price" type="text" placeholder="Price (24,90 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+              <div>
+                 <label className="block text-xs text-gray-400 mb-2 uppercase">Upload Image</label>
+                 <input name="image" type="file" accept="image/*" className="w-full text-base text-gray-400 file:mr-4 file:py-3 file:px-4 file:rounded-sm file:border-0 file:bg-white/10 file:text-white" />
+              </div>
+              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Upload Product</button>
+            </form>
+          </div>
+          <div className="space-y-3">
+            {productsDB.map((p: ProductItem) => (
+              <div key={p.id} className={`p-4 flex justify-between items-center border rounded-sm ${bgBorder}`}>
+                <div className="flex items-center gap-4">
+                  <img src={p.image} className="w-12 h-12 object-cover rounded-sm" />
+                  <span className="text-base font-medium">{p.name}</span>
+                </div>
+                <button onClick={() => { setProductsDB(prev => prev.filter(x => x.id !== p.id)); addNotification("Product Deleted", "info"); }} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,16 +424,15 @@ function AuthView() {
 
   const simulateLogin = (e: React.FormEvent, provider: string = 'email') => {
     e.preventDefault();
-    // Simulate fetching user from DB. Start them with 9 haircuts to demonstrate the reward system easily!
     setCurrentUser({
-      id: Math.random().toString(),
+      id: 'demo_user',
       name: provider === 'email' ? 'Demo User' : `${provider} User`,
       email: 'demo@example.com',
       phone: '0151 9876543',
-      haircutCount: 9 
+      haircutCount: 9 // Start at 9 to demonstrate the loyalty reward quickly
     });
     addNotification("Login successful!", "success");
-    setPage('booking'); // Redirect straight to booking after login
+    setPage('profile'); // Send them to their new profile page!
   };
 
   return (
@@ -234,7 +518,6 @@ function BookingView() {
     bookSlot(selectedSlot);
     setAppointments(prev => [...prev, newAppt]);
     
-    // Update Loyalty Points
     if (useReward) {
       setCurrentUser({ ...currentUser, haircutCount: currentUser.haircutCount - 10 });
       addNotification("Reward applied! 50% discount will be active.", 'success');
@@ -275,7 +558,6 @@ function BookingView() {
           ) : (
             <form onSubmit={handleSubmit} className={`space-y-5 md:space-y-6 p-6 md:p-10 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
               
-              {/* LOYALTY REWARD BANNER */}
               {hasReward && (
                 <div className="p-4 border border-green-500/50 bg-green-500/10 rounded-sm flex items-start gap-3 animate-pulse">
                   <input type="checkbox" id="reward" checked={useReward} onChange={(e) => setUseReward(e.target.checked)} className="mt-1 w-4 h-4 cursor-pointer accent-green-500" />
@@ -319,6 +601,7 @@ function BookingView() {
                 </div>
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.time} *</label>
+                  <input required name="time" type="hidden" value={selectedSlot} />
                   {openSlots.length > 0 ? (
                     <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 md:gap-3">
                       {openSlots.map((slot: TimeSlot) => (
@@ -363,101 +646,6 @@ function BookingView() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// --- ADMIN DASHBOARD ---
-function AdminView() {
-  const { isAdminAuth, setIsAdminAuth, appointments, setAppointments, servicesDB, setServicesDB, productsDB, setProductsDB, addNotification, theme } = useApp();
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [tab, setTab] = useState<'appointments' | 'services' | 'products'>('appointments');
-  
-  const isHeritage = theme === 'heritage';
-  const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
-  const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (user === 'admin' && pass === 'rebo123') {
-      setIsAdminAuth(true);
-      addNotification("Admin Login Successful", 'success');
-    } else {
-      alert("Invalid credentials. Try admin / rebo123");
-    }
-  };
-
-  const handleConfirm = (id: string, sendsms: boolean) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'confirmed' } : a));
-    addNotification(`Reservation Confirmed! ${sendsms ? 'SMS sent to customer.' : ''}`, 'success');
-  };
-
-  const handleCancel = (id: string) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' } : a));
-    addNotification("Reservation Cancelled.", 'info');
-  };
-
-  if (!isAdminAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center pt-28 px-4">
-        <form onSubmit={handleLogin} className={`p-8 md:p-10 border rounded-sm w-full max-w-md shadow-2xl ${bgBorder}`}>
-          <h2 className={`text-2xl font-bold mb-6 text-center ${primaryColor}`}>Admin Portal</h2>
-          <input required type="text" placeholder="Username" value={user} onChange={e=>setUser(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm mb-4 outline-none text-white text-sm" />
-          <input required type="password" placeholder="Password" value={pass} onChange={e=>setPass(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm mb-6 outline-none text-white text-sm" />
-          <button type="submit" className={`w-full py-3 font-bold uppercase tracking-widest text-xs text-black transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>Login</button>
-        </form>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
-        <h2 className={`text-2xl md:text-3xl font-bold uppercase tracking-widest ${primaryColor}`}>Dashboard</h2>
-        <button onClick={() => setIsAdminAuth(false)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 px-2 py-2">Logout</button>
-      </div>
-
-      <div className="flex gap-2 md:gap-4 mb-8 overflow-x-auto pb-2">
-        {['appointments', 'services', 'products'].map((t) => (
-          <button key={t} onClick={() => setTab(t as any)} className={`px-5 py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold rounded-sm transition-colors whitespace-nowrap ${tab === t ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'appointments' && (
-        <div className={`p-4 md:p-6 border rounded-sm ${bgBorder}`}>
-          <h3 className="text-lg md:text-xl font-bold mb-4">Incoming Reservations</h3>
-          <div className="space-y-4">
-            {appointments.map(a => (
-              <div key={a.id} className="bg-black/50 p-4 md:p-6 border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 rounded-sm">
-                <div>
-                  <p className="font-bold text-base md:text-lg">{a.name} <span className="text-sm text-gray-400 font-normal">({a.phone})</span></p>
-                  <p className="text-sm text-gray-300">{a.service} {a.usedReward && <span className="text-green-400 font-bold ml-2">(Used 50% Reward)</span>}</p>
-                  <p className="text-sm text-gray-300">Stylist: {a.stylist} — {a.date} at {a.time}</p>
-                  <p className={`text-xs mt-2 border inline-block px-2 py-1 rounded ${a.sendsms ? 'border-green-500/50 text-green-400' : 'border-red-500/50 text-red-400'}`}>
-                    {a.sendsms ? 'SMS Reminder Requested' : 'No SMS Requested'}
-                  </p>
-                  <p className={`text-sm mt-3 font-bold ${a.status === 'confirmed' ? 'text-green-400' : a.status === 'cancelled' ? 'text-red-400' : 'text-yellow-400'}`}>
-                    Status: {a.status.toUpperCase()}
-                  </p>
-                </div>
-                <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
-                  {a.status === 'pending' && (
-                    <>
-                      <button onClick={() => handleConfirm(a.id, a.sendsms)} className="flex-1 md:flex-none bg-green-600/20 text-green-400 border border-green-600 px-4 py-3 text-xs font-bold uppercase hover:bg-green-600 hover:text-white transition-colors rounded-sm">Confirm</button>
-                      <button onClick={() => handleCancel(a.id)} className="flex-1 md:flex-none bg-red-600/20 text-red-400 border border-red-600 px-4 py-3 text-xs font-bold uppercase hover:bg-red-600 hover:text-white transition-colors rounded-sm">Reject</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-            {appointments.length === 0 && <p className="text-gray-500 text-sm py-4">No appointments found.</p>}
-          </div>
-        </div>
-      )}
-      {/* Services and Products tabs remain unchanged but hidden here for brevity. They will render from the DB. */}
     </div>
   );
 }
@@ -544,6 +732,7 @@ function MainContent() {
       <main className="grow">
         {page === 'admin' && <AdminView />}
         {page === 'auth' && <AuthView />}
+        {page === 'profile' && <ProfileView />}
         {page === 'booking' && <BookingView />}
         {page === 'contact' && <ContactView />}
         
@@ -645,16 +834,16 @@ function MainContent() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
-                <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`} style={{ animationDelay: `${idx * 150}ms` }}>
+                <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`}>
                   <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
                     <img src={item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
-                  <div className="p-6 md:p-8 flex flex-col grow relative">
+                  <div className="p-6 flex flex-col grow">
                     <div className="grow">
-                      <h3 className={`text-xl mb-2 ${isHeritage ? 'font-serif-custom text-white' : 'font-bold'}`}>{item.name}</h3>
-                      <p className="text-gray-400 text-sm mb-6 leading-relaxed">{item.desc}</p>
+                      <h3 className={`text-lg md:text-xl mb-2 ${isHeritage ? 'font-serif-custom text-white' : 'font-bold'}`}>{item.name}</h3>
+                      <p className="text-gray-400 text-xs md:text-sm mb-6 leading-relaxed">{item.desc}</p>
                     </div>
-                    <div className={`text-2xl font-bold ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{item.price}</div>
+                    <div className={`text-xl font-bold ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{item.price}</div>
                   </div>
                 </div>
               ))}
@@ -664,7 +853,7 @@ function MainContent() {
       </main>
 
       {/* Footer */}
-      {page !== 'admin' && page !== 'booking' && page !== 'contact' && page !== 'auth' && (
+      {page !== 'admin' && page !== 'booking' && page !== 'contact' && page !== 'auth' && page !== 'profile' && (
         <footer className={`w-full py-6 text-center text-xs tracking-wider border-t ${isHeritage ? 'border-[#c5a059]/10 text-gray-600' : 'border-white/5 text-gray-500'}`}>
           <p>
             © {new Date().getFullYear()} Rebo Salon. Alle Rechte vorbehalten. 
