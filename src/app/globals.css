@@ -1,10 +1,22 @@
 @import "tailwindcss";
 
-@layer utilities {
-  .font-serif-custom {
-    font-family: 'Playfair Display', serif;
+@layer base {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
-  .font-sans-custom {
-    font-family: 'Lato', sans-serif;
+
+  /* Prevent iOS Safari auto-zoom on form focus */
+  input[type="text"],
+  input[type="tel"],
+  input[type="email"],
+  input[type="date"],
+  input[type="time"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
