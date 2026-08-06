@@ -3,10 +3,17 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Language = 'de' | 'en';
 type Theme = 'modern' | 'heritage';
-// ADDED 'contact' TO PAGE TYPES
-type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin';
+type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth';
 
-export type Appointment = { id: string; name: string; phone: string; service: string; stylist: string; date: string; time: string; status: 'pending' | 'confirmed' | 'cancelled' };
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  haircutCount: number; // For the Loyalty System
+};
+
+export type Appointment = { id: string; userId: string; name: string; phone: string; service: string; stylist: string; date: string; time: string; status: 'pending' | 'confirmed' | 'cancelled'; sendsms: boolean; usedReward: boolean };
 export type ServiceItem = { id: string; name: string; price: string; oldPrice: string };
 export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
 export type Notification = { id: number; message: string; type: 'success' | 'info' };
@@ -18,6 +25,7 @@ interface AppContextType {
   page: Page; setPage: (page: Page) => void;
   t: any;
   isAdminAuth: boolean; setIsAdminAuth: (val: boolean) => void;
+  currentUser: User | null; setCurrentUser: (user: User | null) => void;
   appointments: Appointment[]; setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   servicesDB: ServiceItem[]; setServicesDB: React.Dispatch<React.SetStateAction<ServiceItem[]>>;
   productsDB: ProductItem[]; setProductsDB: React.Dispatch<React.SetStateAction<ProductItem[]>>;
@@ -46,7 +54,7 @@ const initialProducts: ProductItem[] = [
 ];
 
 const initialAppointments: Appointment[] = [
-  { id: 'a1', name: "Max Mustermann", phone: "0151 1234567", service: "Haarschnitt & Bart", stylist: "Rebo", date: "2026-08-10", time: "10:00", status: "pending" }
+  { id: 'a1', userId: 'u1', name: "Max Mustermann", phone: "0151 1234567", service: "Haarschnitt & Bart", stylist: "Rebo", date: "2026-08-10", time: "10:00", status: "pending", sendsms: true, usedReward: false }
 ];
 
 const translations = {
@@ -71,25 +79,24 @@ const translations = {
     },
     products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" },
     contact: {
-      title: "Kontakt",
-      subtitle: "Besuchen Sie uns am Roßmarkt",
-      addressLabel: "Adresse",
-      address: "Manggasse 6, 97421 Schweinfurt",
-      phoneLabel: "Telefon",
-      phone: "+49 176 42980985",
-      hoursLabel: "Öffnungszeiten",
-      hours: [
-        { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" },
-        { days: "Sonntag", time: "Geschlossen" }
-      ],
+      title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt",
+      phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten",
+      hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ],
       socialLabel: "Social Media"
     },
+    auth: {
+      loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.",
+      email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren",
+      social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?",
+      registerTitle: "Konto erstellen",
+    },
     booking: {
-      title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten und eine freie Zeit.",
-      quote: "Dein perfekter Look beginnt hier.",
+      title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten und eine freie Zeit.", quote: "Dein perfekter Look beginnt hier.",
       name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen",
       stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"],
       date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.",
+      smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.",
+      reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?",
       submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir bestätigen Ihren Termin in Kürze.",
       noSlots: "Heute keine Termine mehr frei."
     },
@@ -116,25 +123,24 @@ const translations = {
     },
     products: { title: "Store & Products", subtitle: "Professional care for home" },
     contact: {
-      title: "Contact Us",
-      subtitle: "Visit us at Roßmarkt",
-      addressLabel: "Address",
-      address: "Manggasse 6, 97421 Schweinfurt",
-      phoneLabel: "Phone",
-      phone: "+49 176 42980985",
-      hoursLabel: "Opening Hours",
-      hours: [
-        { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" },
-        { days: "Sunday", time: "Closed" }
-      ],
+      title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt",
+      phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours",
+      hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ],
       socialLabel: "Social Media"
     },
+    auth: {
+      loginTitle: "Login", loginSub: "Please log in to book an appointment.",
+      email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account",
+      social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?",
+      registerTitle: "Create Account",
+    },
     booking: {
-      title: "Book Appointment", subtitle: "Select your stylist and an available time.",
-      quote: "Your perfect look begins here.",
+      title: "Book Appointment", subtitle: "Select your stylist and an available time.", quote: "Your perfect look begins here.",
       name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist",
       stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"],
       date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.",
+      smsNote: "Receive SMS reminder 24h before appointment.",
+      reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?",
       submit: "Confirm Booking", success: "Request sent! We will confirm your appointment shortly.",
       noSlots: "No slots available today."
     },
@@ -150,6 +156,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [page, setPageState] = useState<Page>('home');
   
   const [isAdminAuth, setIsAdminAuth] = useState(false);
+  // NEW: User Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   const [servicesDB, setServicesDB] = useState<ServiceItem[]>(initialServices);
   const [productsDB, setProductsDB] = useState<ProductItem[]>(initialProducts);
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
@@ -173,8 +182,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as Page;
-      // Added 'contact' to allowed hashes
-      if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin'].includes(hash)) {
+      if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin', 'auth'].includes(hash)) {
         setPageState(hash);
       } else {
         setPageState('home');
@@ -187,6 +195,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setPage = (newPage: Page) => {
     if (newPage !== page) {
+      // If trying to access booking without login, redirect to Auth
+      if (newPage === 'booking' && !currentUser) {
+        window.history.pushState(null, '', '#auth');
+        setPageState('auth');
+        return;
+      }
+
       const newUrl = newPage === 'home' ? window.location.pathname : `#${newPage}`;
       window.history.pushState(null, '', newUrl);
       setPageState(newPage);
@@ -199,7 +214,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider value={{ 
       lang, setLang, theme, setTheme, page, setPage, t,
-      isAdminAuth, setIsAdminAuth,
+      isAdminAuth, setIsAdminAuth, currentUser, setCurrentUser,
       servicesDB, setServicesDB, productsDB, setProductsDB,
       appointments, setAppointments,
       notifications, addNotification,
