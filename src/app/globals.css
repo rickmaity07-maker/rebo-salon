@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-serif-custom {
+    font-family: 'Playfair Display', serif;
+  }
+  .font-sans-custom {
+    font-family: 'Lato', sans-serif;
+  }
+}
