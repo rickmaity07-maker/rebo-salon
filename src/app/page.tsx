@@ -4,20 +4,13 @@ import { AppProvider, useApp, TimeSlot, ServiceItem, ProductItem, Appointment } 
 
 // --- NAVBAR ---
 function Navbar() {
-  const { lang, setLang, page, setPage, theme, t, currentUser, setCurrentUser, addNotification } = useApp();
+  const { lang, setLang, page, setPage, theme, t, currentUser, logout } = useApp();
   const isHeritage = theme === 'heritage';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigateTo = (p: any) => {
-    setPage(p);
+  const navigateTo = (p: string) => {
+    setPage(p as any);
     setMobileMenuOpen(false);
-  };
-
-  const handleLogout = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentUser(null);
-    setPage('home');
-    addNotification(lang === 'de' ? 'Erfolgreich abgemeldet' : 'Successfully logged out', 'info');
   };
 
   return (
@@ -36,71 +29,56 @@ function Navbar() {
 
         {/* DESKTOP NAVIGATION */}
         <div className="hidden lg:flex items-center gap-6 xl:gap-8 justify-end w-full">
-          {/* Main Links */}
           <div className="flex items-center gap-6 xl:gap-8 mr-4">
-            <button onClick={() => setPage('home')} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === 'home' ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
-              {t.nav.home}
-            </button>
-            <button onClick={() => setPage('services')} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === 'services' ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
-              {t.nav.services}
-            </button>
-            <button onClick={() => setPage('gallery')} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === 'gallery' ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
-              {t.nav.gallery}
-            </button>
-            <button onClick={() => setPage('products')} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === 'products' ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
-              {t.nav.products}
-            </button>
-            <button onClick={() => setPage('contact')} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === 'contact' ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
-              {t.nav.contact}
-            </button>
+            {['home', 'services', 'gallery', 'products', 'contact'].map(p => (
+              <button key={p} onClick={() => setPage(p as any)} className={`text-xs xl:text-sm tracking-widest uppercase transition-colors ${page === p ? (isHeritage ? 'text-[#c5a059] font-bold border-b border-[#c5a059] pb-1' : 'text-[#d4af37]') : 'text-gray-400 hover:text-white'}`}>
+                {t.nav[p] || p}
+              </button>
+            ))}
           </div>
           
-          {/* Divider */}
           <div className="h-6 w-px bg-gray-700 mx-2"></div>
-
-          {/* Lang Toggle */}
-          <div className="flex items-center gap-1 border border-gray-700 rounded-full p-1">
-            <button onClick={() => setLang('de')} className={`text-xs font-bold px-2 py-1 rounded-full transition-colors ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>DE</button>
-            <button onClick={() => setLang('en')} className={`text-xs font-bold px-2 py-1 rounded-full transition-colors ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>EN</button>
-          </div>
 
           {/* ICON-BASED AUTH / PROFILE */}
           {currentUser ? (
-            <div className="relative group ml-2">
+            <div className="relative group mx-2">
               <button 
                 onClick={() => setPage('profile')}
                 className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all ${isHeritage ? 'border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37] hover:text-black'}`}
               >
-                {/* User Profile Icon */}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               </button>
               
-              {/* Dropdown on Hover */}
               <div className="absolute right-0 mt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                 <div className={`p-4 rounded-sm border shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
                   <p className="font-bold text-sm text-white mb-1 truncate">{currentUser.name}</p>
                   <p className={`text-xs mb-4 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
                   <button onClick={() => setPage('profile')} className="block w-full text-left text-xs uppercase tracking-widest text-gray-300 hover:text-white mb-3">Profile</button>
-                  <button onClick={handleLogout} className="block w-full text-left text-xs uppercase tracking-widest text-red-400 hover:text-red-300">Logout</button>
+                  {currentUser.role === 'admin' && (
+                    <button onClick={() => setPage('admin')} className="block w-full text-left text-xs uppercase tracking-widest text-blue-400 hover:text-blue-300 mb-3">Admin Panel</button>
+                  )}
+                  <button onClick={logout} className="block w-full text-left text-xs uppercase tracking-widest text-red-400 hover:text-red-300">Logout</button>
                 </div>
               </div>
             </div>
           ) : (
             <button 
               onClick={() => setPage('auth')} 
-              className="ml-2 w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-              title={isHeritage ? "Einloggen" : "Login"}
+              className="mx-2 w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-colors"
             >
-              {/* Login/Lock Icon */}
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
             </button>
           )}
+
+          {/* LANG TOGGLE */}
+          <div className="flex items-center gap-1 border border-gray-700 rounded-full p-1 ml-2">
+            <button onClick={() => setLang('de')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>DE</button>
+            <button onClick={() => setLang('en')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>EN</button>
+          </div>
         </div>
 
         {/* MOBILE CONTROLS */}
         <div className="flex lg:hidden items-center gap-4">
-          
-          {/* Mobile Auth Icon (Quick Access) */}
           {!currentUser ? (
              <button onClick={() => setPage('auth')} className="p-2 text-gray-400 hover:text-white">
                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
@@ -148,7 +126,7 @@ function Navbar() {
                 <p className="text-sm font-bold text-white underline">{t.profile.title}</p>
                 <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
               </div>
-              <button onClick={(e) => { handleLogout(e); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
+              <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
             </div>
           ) : (
             <button onClick={() => navigateTo('auth')} className={`block w-full mt-4 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
@@ -163,12 +141,58 @@ function Navbar() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
-        <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
+        <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : n.type === 'error' ? 'bg-[#111] border-red-500 text-red-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- AUTHENTICATION PORTAL ---
+function AuthView() {
+  const { theme, t, login } = useApp();
+  const [isLogin, setIsLogin] = useState(true);
+  const isHeritage = theme === 'heritage';
+
+  return (
+    <div className="flex min-h-screen pt-20">
+      <div className="hidden lg:block lg:w-1/2 relative bg-black/50">
+        <img src="https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=1600&q=80" alt="Login Background" className="w-full h-full object-cover grayscale-50 opacity-40" />
+      </div>
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 md:px-8 py-12">
+        <div className="w-full max-w-md animate-in fade-in slide-in-from-right-8 duration-1000">
+          <div className="mb-10 text-center">
+             <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{isLogin ? t.auth.loginTitle : t.auth.registerTitle}</h2>
+             <p className="text-gray-400 text-sm">{t.auth.loginSub}</p>
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); login('email'); }} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
+            <div className="space-y-4 mb-6">
+              {!isLogin && (
+                <input required type="text" placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              )}
+              <input required type="email" placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              <input required type="password" placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+            </div>
+
+            <button type="submit" className={`w-full py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
+              {isLogin ? t.auth.loginBtn : t.auth.registerTitle}
+            </button>
+
+            <div className="mt-8 relative">
+               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
+               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>For Demo Purposes</span></div>
+            </div>
+
+            <div className="flex gap-4 mt-6">
+              <button type="button" onClick={() => login('user_demo')} className={`flex-1 py-3 font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'border border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059]/10' : 'border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37]/10'}`}>Mock Client</button>
+              <button type="button" onClick={() => login('admin_demo')} className={`flex-1 py-3 font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>Mock Admin</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
@@ -196,8 +220,6 @@ function ProfileView() {
       <div className={`p-8 mb-10 border rounded-sm shadow-xl ${bgBorder}`}>
         <h3 className="text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
         <p className="text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
-        
-        {/* Loyalty Progress Bar */}
         <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
           <div 
             className={`h-full transition-all duration-1000 ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`} 
@@ -236,8 +258,6 @@ function ProfileView() {
                   </div>
                   <span className="text-xs uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Completed</span>
                 </div>
-                
-                {/* Stylist Notes displayed to user */}
                 <div className="mt-4 p-4 bg-black/40 border border-white/5 rounded-sm">
                   <h4 className={`text-xs uppercase font-bold tracking-widest mb-2 ${primaryColor}`}>{t.profile.notesLabel}</h4>
                   <p className="text-sm text-gray-300 leading-relaxed italic">
@@ -254,101 +274,75 @@ function ProfileView() {
   );
 }
 
-
 // --- ADMIN DASHBOARD ---
 function AdminView() {
-  const { isAdminAuth, setIsAdminAuth, appointments, setAppointments, servicesDB, setServicesDB, productsDB, setProductsDB, addNotification, theme, t } = useApp();
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
-  const [tab, setTab] = useState<'appointments' | 'services' | 'products'>('appointments');
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang } = useApp();
+  const [tab, setTab] = useState<'appointments' | 'services' | 'products' | 'translations'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
   
+  const [transSection, setTransSection] = useState('hero');
+  const [transKey, setTransKey] = useState('title');
+  const [transVal, setTransVal] = useState('');
+
   const isHeritage = theme === 'heritage';
   const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
   const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSaveTrans = (e: React.FormEvent) => {
     e.preventDefault();
-    if (user === 'admin' && pass === 'rebo123') {
-      setIsAdminAuth(true);
-      addNotification("Admin Login Successful", 'success');
-    } else {
-      alert("Invalid credentials. Try admin / rebo123");
-    }
+    updateTranslation(lang, transSection, transKey, transVal);
+    setTransVal('');
   };
-
-  const handleConfirm = (id: string, sendsms: boolean) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'confirmed' } : a));
-    addNotification(`Reservation Confirmed! ${sendsms ? 'SMS sent to customer.' : ''}`, 'success');
-  };
-
-  const handleCancel = (id: string) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelled' } : a));
-    addNotification("Reservation Cancelled.", 'info');
-  };
-
-  const handleSaveNotes = (id: string) => {
-    const note = editingNotes[id];
-    if(note !== undefined) {
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, notes: note } : a));
-      addNotification("Stylist notes saved to customer profile.", "success");
-    }
-  };
-
-  const handleAddProduct = (e: any) => {
-    e.preventDefault();
-    const name = e.target.name.value;
-    const price = e.target.price.value;
-    const desc = e.target.desc.value;
-    const file = e.target.image.files[0];
-    const imageUrl = file ? URL.createObjectURL(file) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80';
-    
-    setProductsDB(prev => [...prev, { id: Date.now().toString(), name, price, desc, image: imageUrl }]);
-    addNotification("Product added to Store!", 'success');
-    e.target.reset();
-  };
-
-  const handleAddService = (e: any) => {
-    e.preventDefault();
-    setServicesDB(prev => [...prev, { id: Date.now().toString(), name: e.target.name.value, price: e.target.price.value, oldPrice: e.target.oldPrice.value }]);
-    addNotification("Service added!", 'success');
-    e.target.reset();
-  };
-
-  if (!isAdminAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center pt-28 px-4">
-        <form onSubmit={handleLogin} className={`p-8 md:p-10 border rounded-sm w-full max-w-md shadow-2xl ${bgBorder}`}>
-          <h2 className={`text-2xl font-bold mb-6 text-center ${primaryColor}`}>Admin Portal</h2>
-          <input required type="text" placeholder="Username" value={user} onChange={e=>setUser(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm mb-4 outline-none text-white text-base" />
-          <input required type="password" placeholder="Password" value={pass} onChange={e=>setPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm mb-6 outline-none text-white text-base" />
-          <button type="submit" className={`w-full py-4 font-bold uppercase tracking-widest text-sm text-black transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>Login</button>
-        </form>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
-        <h2 className={`text-2xl md:text-3xl font-bold uppercase tracking-widest ${primaryColor}`}>Dashboard</h2>
-        <button onClick={() => setIsAdminAuth(false)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 px-2 py-2">Logout</button>
+        <h2 className={`text-2xl md:text-3xl font-bold uppercase tracking-widest ${primaryColor}`}>Admin Control Panel</h2>
       </div>
 
       <div className="flex gap-2 md:gap-4 mb-8 overflow-x-auto pb-2">
-        {['appointments', 'services', 'products'].map((t) => (
-          <button key={t} onClick={() => setTab(t as any)} className={`px-5 py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold rounded-sm transition-colors whitespace-nowrap ${tab === t ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
-            {t}
+        {['appointments', 'services', 'products', 'translations'].map((tb) => (
+          <button key={tb} onClick={() => setTab(tb as any)} className={`px-5 py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold rounded-sm transition-colors whitespace-nowrap ${tab === tb ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
+            {tb}
           </button>
         ))}
       </div>
+
+      {tab === 'translations' && (
+        <div className={`p-6 border rounded-sm ${bgBorder} max-w-xl`}>
+          <h3 className="text-xl font-bold mb-2">Dynamic Translation Editor</h3>
+          <p className="text-sm text-gray-400 mb-6">Edit texts for the currently active language ({lang.toUpperCase()}).</p>
+          <form onSubmit={handleSaveTrans} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-2">Section</label>
+                <select value={transSection} onChange={(e)=>setTransSection(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm">
+                  {Object.keys(t).map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-2">Key</label>
+                <select value={transKey} onChange={(e)=>setTransKey(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm">
+                  {t[transSection] && typeof t[transSection] === 'object' ? 
+                    Object.keys(t[transSection]).map(k => <option key={k} value={k}>{k}</option>) : <option value="title">title</option>
+                  }
+                </select>
+              </div>
+            </div>
+            <div>
+               <label className="block text-xs uppercase text-gray-400 mb-2">New Text Value</label>
+               <textarea required value={transVal} onChange={(e)=>setTransVal(e.target.value)} rows={3} className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" placeholder="Enter new text here..."></textarea>
+            </div>
+            <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Save to State</button>
+          </form>
+        </div>
+      )}
 
       {tab === 'appointments' && (
         <div className={`p-4 md:p-6 border rounded-sm ${bgBorder}`}>
           <h3 className="text-lg md:text-xl font-bold mb-6">Reservation Management</h3>
           <div className="space-y-6">
-            {/* Sorting appointments to show newest first */}
-            {appointments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(a => (
+            {[...appointments].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(a => (
               <div key={a.id} className="bg-black/50 p-4 md:p-6 border border-white/10 flex flex-col gap-4 rounded-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -365,14 +359,13 @@ function AdminView() {
                   <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
                     {a.status === 'pending' && (
                       <>
-                        <button onClick={() => handleConfirm(a.id, a.sendsms)} className="flex-1 md:flex-none bg-green-600/20 text-green-400 border border-green-600 px-4 py-3 text-xs font-bold uppercase hover:bg-green-600 hover:text-white transition-colors rounded-sm">Confirm</button>
-                        <button onClick={() => handleCancel(a.id)} className="flex-1 md:flex-none bg-red-600/20 text-red-400 border border-red-600 px-4 py-3 text-xs font-bold uppercase hover:bg-red-600 hover:text-white transition-colors rounded-sm">Reject</button>
+                        <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', a.sendsms)} className="flex-1 md:flex-none bg-green-600/20 text-green-400 border border-green-600 px-4 py-3 text-xs font-bold uppercase hover:bg-green-600 hover:text-white transition-colors rounded-sm">Confirm</button>
+                        <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="flex-1 md:flex-none bg-red-600/20 text-red-400 border border-red-600 px-4 py-3 text-xs font-bold uppercase hover:bg-red-600 hover:text-white transition-colors rounded-sm">Reject</button>
                       </>
                     )}
                   </div>
                 </div>
                 
-                {/* Admin Note Section for Confirmed Cuts */}
                 {a.status === 'confirmed' && (
                   <div className="mt-2 pt-4 border-t border-gray-800">
                     <label className="block text-xs uppercase text-gray-400 mb-2">Stylist CRM Notes (Visible to Client)</label>
@@ -384,7 +377,7 @@ function AdminView() {
                         placeholder="e.g., Skin fade sides, 3mm top..." 
                         className="flex-1 bg-[#1a1a1a] border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
                       />
-                      <button onClick={() => handleSaveNotes(a.id)} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] text-black hover:bg-white' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
+                      <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] text-black hover:bg-white' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
                         {t.profile.saveNote}
                       </button>
                     </div>
@@ -401,7 +394,7 @@ function AdminView() {
         <div className="grid lg:grid-cols-2 gap-8">
           <div className={`p-6 border rounded-sm ${bgBorder}`}>
             <h3 className="text-lg md:text-xl font-bold mb-4">Add Service</h3>
-            <form onSubmit={handleAddService} className="space-y-4">
+            <form onSubmit={(e:any) => { e.preventDefault(); addService({ name: e.target.name.value, price: e.target.price.value, oldPrice: e.target.oldPrice.value }); e.target.reset(); }} className="space-y-4">
               <input required name="name" type="text" placeholder="Service Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               <div className="grid grid-cols-2 gap-4">
                 <input required name="price" type="text" placeholder="Price (30 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
@@ -414,7 +407,7 @@ function AdminView() {
             {servicesDB.map((s: ServiceItem) => (
               <div key={s.id} className={`p-5 flex justify-between items-center border rounded-sm text-base ${bgBorder}`}>
                 <span>{s.name} <span className={primaryColor}>({s.price})</span></span>
-                <button onClick={() => { setServicesDB(prev => prev.filter(x => x.id !== s.id)); addNotification("Service Deleted", "info"); }} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
+                <button onClick={() => deleteService(s.id)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
               </div>
             ))}
           </div>
@@ -425,7 +418,7 @@ function AdminView() {
         <div className="grid lg:grid-cols-2 gap-8">
           <div className={`p-6 border rounded-sm ${bgBorder}`}>
             <h3 className="text-lg md:text-xl font-bold mb-4">Add Product</h3>
-            <form onSubmit={handleAddProduct} className="space-y-4">
+            <form onSubmit={(e:any) => { e.preventDefault(); const file = e.target.image?.files[0]; addProduct({ name: e.target.name.value, price: e.target.price.value, desc: e.target.desc.value, image: file ? URL.createObjectURL(file) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80' }); e.target.reset(); }} className="space-y-4">
               <input required name="name" type="text" placeholder="Product Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               <input required name="desc" type="text" placeholder="Description" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               <input required name="price" type="text" placeholder="Price (24,90 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
@@ -443,7 +436,7 @@ function AdminView() {
                   <img src={p.image} className="w-12 h-12 object-cover rounded-sm" />
                   <span className="text-base font-medium">{p.name}</span>
                 </div>
-                <button onClick={() => { setProductsDB(prev => prev.filter(x => x.id !== p.id)); addNotification("Product Deleted", "info"); }} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
+                <button onClick={() => deleteProduct(p.id)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
               </div>
             ))}
           </div>
@@ -453,79 +446,9 @@ function AdminView() {
   );
 }
 
-// --- AUTHENTICATION PORTAL ---
-function AuthView() {
-  const { theme, t, setCurrentUser, setPage, addNotification } = useApp();
-  const [isLogin, setIsLogin] = useState(true);
-  const isHeritage = theme === 'heritage';
-
-  const simulateLogin = (e: React.FormEvent, provider: string = 'email') => {
-    e.preventDefault();
-    setCurrentUser({
-      id: 'demo_user',
-      name: provider === 'email' ? 'Demo User' : `${provider} User`,
-      email: 'demo@example.com',
-      phone: '0151 9876543',
-      haircutCount: 9 // Start at 9 to demonstrate the loyalty reward quickly
-    });
-    addNotification("Login successful!", "success");
-    setPage('profile'); // Send them to their new profile page!
-  };
-
-  return (
-    <div className="flex min-h-screen pt-20">
-      <div className="hidden lg:block lg:w-1/2 relative bg-black/50">
-        <img src="https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=1600&q=80" alt="Login Background" className="w-full h-full object-cover grayscale-50 opacity-40" />
-      </div>
-      
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 md:px-8 py-12">
-        <div className="w-full max-w-md animate-in fade-in slide-in-from-right-8 duration-1000">
-          <div className="mb-10 text-center">
-             <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>
-               {isLogin ? t.auth.loginTitle : t.auth.registerTitle}
-             </h2>
-             <p className="text-gray-400 text-sm">{t.auth.loginSub}</p>
-          </div>
-
-          <form onSubmit={(e) => simulateLogin(e, 'email')} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
-            <div className="space-y-4 mb-6">
-              {!isLogin && (
-                <input required type="text" placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
-              )}
-              <input required type="email" placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
-              <input required type="password" placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
-            </div>
-
-            <button type="submit" className={`w-full py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
-              {isLogin ? t.auth.loginBtn : t.auth.registerTitle}
-            </button>
-
-            <div className="mt-8 relative">
-               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
-               <div className="relative flex justify-center text-xs uppercase"><span className={`px-2 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>{t.auth.social}</span></div>
-            </div>
-
-            <div className="mt-6 flex gap-4">
-              <button type="button" onClick={(e) => simulateLogin(e, 'Google')} className="flex-1 py-3 border border-gray-700 rounded-sm text-sm font-medium hover:bg-white/5 transition-colors">Google</button>
-              <button type="button" onClick={(e) => simulateLogin(e, 'Facebook')} className="flex-1 py-3 border border-gray-700 rounded-sm text-sm font-medium hover:bg-white/5 transition-colors">Facebook</button>
-            </div>
-
-            <p className="mt-8 text-center text-xs text-gray-400">
-              {isLogin ? t.auth.noAccount : t.auth.haveAccount} 
-              <button type="button" onClick={() => setIsLogin(!isLogin)} className={`ml-2 underline hover:text-white ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>
-                {isLogin ? t.auth.register : t.auth.loginBtn}
-              </button>
-            </p>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // --- PUBLIC BOOKING VIEW ---
 function BookingView() {
-  const { t, theme, lang, currentUser, setCurrentUser, setAppointments, addNotification, servicesDB, availableSlots, bookSlot } = useApp();
+  const { t, theme, lang, currentUser, addAppointment, servicesDB, availableSlots } = useApp();
   const [submitted, setSubmitted] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [useReward, setUseReward] = useState(false);
@@ -534,35 +457,30 @@ function BookingView() {
   const openSlots = availableSlots.filter(slot => !slot.isBooked);
   const hasReward = currentUser && currentUser.haircutCount >= 10;
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedSlot || !currentUser) return;
 
-    const newAppt = {
-      id: Date.now().toString(),
+    const target = e.target as typeof e.target & {
+      service: { value: string };
+      stylist: { value: string };
+      date: { value: string };
+      sendsms: { checked: boolean };
+    };
+
+    addAppointment({
       userId: currentUser.id,
       name: currentUser.name,
       phone: currentUser.phone,
-      service: e.target.service.value,
-      stylist: e.target.stylist.value,
-      date: e.target.date.value,
+      service: target.service.value,
+      stylist: target.stylist.value,
+      date: target.date.value,
       time: openSlots.find(s => s.id === selectedSlot)?.time || '00:00',
-      status: 'pending' as const,
-      sendsms: e.target.sendsms.checked,
+      status: 'pending',
+      sendsms: target.sendsms.checked,
       usedReward: useReward
-    };
+    });
     
-    bookSlot(selectedSlot);
-    setAppointments(prev => [...prev, newAppt]);
-    
-    if (useReward) {
-      setCurrentUser({ ...currentUser, haircutCount: currentUser.haircutCount - 10 });
-      addNotification("Reward applied! 50% discount will be active.", 'success');
-    } else {
-      setCurrentUser({ ...currentUser, haircutCount: currentUser.haircutCount + 1 });
-    }
-
-    addNotification("New Reservation Received!", 'success');
     setSubmitted(true);
   };
 
@@ -648,7 +566,7 @@ function BookingView() {
                           onClick={() => setSelectedSlot(slot.id)}
                           className={`py-3 px-2 rounded-sm border text-sm font-medium transition-colors ${
                             selectedSlot === slot.id 
-                              ? (isHeritage ? 'bg-[#c5a059] text-[#1a1814] border-[#c5a059]' : 'bg-[#d4af37] text-black border-[#d4af37]') 
+                              ? (isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black') 
                               : (isHeritage ? 'border-[#c5a059]/30 text-gray-400 hover:border-[#c5a059]' : 'border-white/20 text-gray-400 hover:border-[#d4af37]')
                           }`}
                         >
@@ -821,7 +739,7 @@ function MainContent() {
             <div className="relative h-[30vh] md:h-[40vh] w-full flex items-center justify-center overflow-hidden mb-12">
               <div className="absolute inset-0 bg-black/60 z-10" />
               <img src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=1600&q=80" className="absolute inset-0 w-full h-full object-cover grayscale-30" />
-              <div className="relative z-20 text-center px-4 animate-in slide-in-from-bottom-8 duration-1000">
+              <div className="relative z-20 text-center px-4">
                 <h2 className={`text-3xl md:text-6xl font-bold mb-2 ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'uppercase tracking-tighter'}`}>{t.services.title}</h2>
                 <p className={`tracking-[0.2em] uppercase text-xs md:text-sm ${isHeritage ? 'text-gray-300' : 'text-[#d4af37]'}`}>{t.services.subtitle}</p>
               </div>
@@ -845,7 +763,7 @@ function MainContent() {
             <div className={`text-center mb-12 pb-8 ${isHeritage ? 'border-b border-[#c5a059]/20' : ''}`}>
                <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'uppercase tracking-tight'}`}>{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-75 md:auto-rows-[300px]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-75 md:auto-rows-75">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -871,16 +789,16 @@ function MainContent() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
-                <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`}>
+                <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`} style={{ animationDelay: `${idx * 150}ms` }}>
                   <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
                     <img src={item.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
-                  <div className="p-6 flex flex-col grow">
+                  <div className="p-6 md:p-8 flex flex-col grow relative">
                     <div className="grow">
-                      <h3 className={`text-lg md:text-xl mb-2 ${isHeritage ? 'font-serif-custom text-white' : 'font-bold'}`}>{item.name}</h3>
-                      <p className="text-gray-400 text-xs md:text-sm mb-6 leading-relaxed">{item.desc}</p>
+                      <h3 className={`text-xl mb-2 ${isHeritage ? 'font-serif-custom text-white' : 'font-bold'}`}>{item.name}</h3>
+                      <p className="text-gray-400 text-sm mb-6 leading-relaxed">{item.desc}</p>
                     </div>
-                    <div className={`text-xl font-bold ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{item.price}</div>
+                    <div className={`text-2xl font-bold ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{item.price}</div>
                   </div>
                 </div>
               ))}
