@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
 import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 type Language = 'de' | 'en';
 type Theme = 'modern' | 'heritage';
@@ -199,15 +199,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updates: any = { status };
     if (notes !== undefined) updates.notes = notes;
     await updateDoc(doc(db, 'appointments', id), updates);
-    if (status === 'confirmed' && sendsms) {
+    
+    if (status === 'confirmed') {
       const appt = appointments.find(a => a.id === id);
-      if (appt && appt.phone) {
+      if (appt) {
+        
+        // --- SEND TWILIO SMS ---
+        if (sendsms && appt.phone) {
+          try {
+            const smsText = `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!`;
+            
+            await fetch('/api/sms', { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify({ phone: appt.phone, message: smsText }) 
+            });
+          } catch (e) { 
+            console.error("SMS failed"); 
+          }
+        }
+        
+        // --- SEND GMAIL CONFIRMATION ---
         try {
-          await fetch('/api/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: appt.phone, message: `Reminder: Appt ${appt.date}, ${appt.time}. Reply C to confirm or R to reschedule. Test message from Twilio.` }) });
-          addNotification("SMS Sent to Customer!", 'success');
-        } catch (e) { addNotification("Failed to send SMS.", 'error'); }
+          const userDoc = await getDoc(doc(db, 'users', appt.userId));
+          if (userDoc.exists() && userDoc.data().email) {
+            
+            const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
+
+            await fetch('/api/email', { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify({ 
+                email: userDoc.data().email, 
+                subject: "Rebo Salon: Terminbestätigung",
+                message: emailText 
+              }) 
+            });
+            addNotification("Status aktualisiert & E-Mail gesendet!", 'success');
+          } else {
+             addNotification("Status aktualisiert (Keine E-Mail gefunden)", 'success');
+          }
+        } catch (e) { 
+          console.error("Email failed", e); 
+          addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error');
+        }
       }
-    } else if (notes) { addNotification("Notes saved.", 'success'); }
+    } else if (notes) { 
+      addNotification("Notizen gespeichert.", 'success'); 
+    }
   };
 
   const addService = async (s: Omit<ServiceItem, 'id'>) => { await addDoc(collection(db, 'services'), s); addNotification("Added!", 'success'); };

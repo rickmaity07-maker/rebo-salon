@@ -7,7 +7,6 @@ const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
 
 export async function POST(request: Request) {
   try {
-    // We still accept the custom German 'message' from your frontend...
     const { phone, message } = await request.json();
 
     if (!phone) {
@@ -25,11 +24,8 @@ export async function POST(request: Request) {
     }
 
     const response = await client.messages.create({
-      // ------------------------------------------------------------------
-      // TWILIO FREE TRIAL FIX: We MUST send this exact template ID. 
-      // WHEN YOU UPGRADE: Change the line below to -> body: message,
-      // ------------------------------------------------------------------
-      body: "sms_appointment_reminders",
+      // We are now passing the actual custom text message here!
+      body: message,
       from: twilioPhone,
       to: formattedPhone,
     });
