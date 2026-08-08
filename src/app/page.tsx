@@ -1,10 +1,12 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp, TimeSlot, ServiceItem, ProductItem, Appointment } from '../context/AppContext';
+import { updateDoc, doc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 // --- NAVBAR ---
 function Navbar() {
-  const { lang, setLang, page, setPage, theme, t, currentUser, logout } = useApp();
+  const { lang, setLang, page, setPage, theme, t, currentUser, logout, isAdminAuth } = useApp();
   const isHeritage = theme === 'heritage';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -54,7 +56,7 @@ function Navbar() {
                   <p className="font-bold text-sm text-white mb-1 truncate">{currentUser.name}</p>
                   <p className={`text-xs mb-4 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
                   <button onClick={() => setPage('profile')} className="block w-full text-left text-xs uppercase tracking-widest text-gray-300 hover:text-white mb-3">Profile</button>
-                  {currentUser.role === 'admin' && (
+                  {isAdminAuth && (
                     <button onClick={() => setPage('admin')} className="block w-full text-left text-xs uppercase tracking-widest text-blue-400 hover:text-blue-300 mb-3">Admin Panel</button>
                   )}
                   <button onClick={logout} className="block w-full text-left text-xs uppercase tracking-widest text-red-400 hover:text-red-300">Logout</button>
@@ -75,6 +77,7 @@ function Navbar() {
             <button onClick={() => setLang('de')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>DE</button>
             <button onClick={() => setLang('en')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>EN</button>
           </div>
+
         </div>
 
         {/* MOBILE CONTROLS */}
@@ -114,11 +117,11 @@ function Navbar() {
             <button onClick={() => setLang('en')} className={`text-xs font-bold px-4 py-2 rounded-sm ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>EN</button>
           </div>
           
-          <button onClick={() => navigateTo('home')} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">{t.nav.home}</button>
-          <button onClick={() => navigateTo('services')} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">{t.nav.services}</button>
-          <button onClick={() => navigateTo('gallery')} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">{t.nav.gallery}</button>
-          <button onClick={() => navigateTo('products')} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">{t.nav.products}</button>
-          <button onClick={() => navigateTo('contact')} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">{t.nav.contact}</button>
+          {['home', 'services', 'gallery', 'products', 'contact'].map(p => (
+            <button key={p} onClick={() => navigateTo(p)} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">
+              {t.nav[p] || p}
+            </button>
+          ))}
           
           {currentUser ? (
             <div className="pt-4 border-t border-gray-800 flex justify-between items-center">
@@ -126,7 +129,12 @@ function Navbar() {
                 <p className="text-sm font-bold text-white underline">{t.profile.title}</p>
                 <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
               </div>
-              <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
+              <div className="flex gap-4">
+                {isAdminAuth && (
+                  <button onClick={() => { navigateTo('admin'); setMobileMenuOpen(false); }} className="text-xs text-blue-400 font-bold uppercase">Admin</button>
+                )}
+                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
+              </div>
             </div>
           ) : (
             <button onClick={() => navigateTo('auth')} className={`block w-full mt-4 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
@@ -141,7 +149,7 @@ function Navbar() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-100 flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
         <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : n.type === 'error' ? 'bg-[#111] border-red-500 text-red-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
@@ -153,9 +161,21 @@ function ToastContainer() {
 
 // --- AUTHENTICATION PORTAL ---
 function AuthView() {
-  const { theme, t, login } = useApp();
+  const { theme, t, loginOAuth, loginEmail, registerEmail } = useApp();
   const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [name, setName] = useState('');
   const isHeritage = theme === 'heritage';
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLogin) {
+      await loginEmail(email, pass);
+    } else {
+      await registerEmail(email, pass, name);
+    }
+  };
 
   return (
     <div className="flex min-h-screen pt-20">
@@ -168,13 +188,13 @@ function AuthView() {
              <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{isLogin ? t.auth.loginTitle : t.auth.registerTitle}</h2>
              <p className="text-gray-400 text-sm">{t.auth.loginSub}</p>
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); login('email'); }} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
+          <form onSubmit={handleEmailAuth} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
             <div className="space-y-4 mb-6">
               {!isLogin && (
-                <input required type="text" placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+                <input required type="text" value={name} onChange={e=>setName(e.target.value)} placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
               )}
-              <input required type="email" placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
-              <input required type="password" placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              <input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              <input required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
             </div>
 
             <button type="submit" className={`w-full py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
@@ -183,13 +203,24 @@ function AuthView() {
 
             <div className="mt-8 relative">
                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
-               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>For Demo Purposes</span></div>
+               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>{t.auth.social}</span></div>
             </div>
 
             <div className="flex gap-4 mt-6">
-              <button type="button" onClick={() => login('user_demo')} className={`flex-1 py-3 font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'border border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059]/10' : 'border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37]/10'}`}>Mock Client</button>
-              <button type="button" onClick={() => login('admin_demo')} className={`flex-1 py-3 font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>Mock Admin</button>
+              <button type="button" onClick={() => loginOAuth('Google')} className="flex-1 py-3 border border-gray-700 rounded-sm text-sm font-medium hover:bg-white/5 transition-colors flex justify-center items-center gap-2">
+                <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg> Google
+              </button>
+              <button type="button" onClick={() => loginOAuth('Facebook')} className="flex-1 py-3 border border-gray-700 rounded-sm text-sm font-medium hover:bg-[#1877F2]/10 hover:border-[#1877F2] transition-colors flex justify-center items-center gap-2">
+                <svg className="w-4 h-4 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clipRule="evenodd" /></svg> Facebook
+              </button>
             </div>
+
+            <p className="mt-8 text-center text-xs text-gray-400">
+              {isLogin ? t.auth.noAccount : t.auth.haveAccount} 
+              <button type="button" onClick={() => setIsLogin(!isLogin)} className={`ml-2 underline hover:text-white ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>
+                {isLogin ? t.auth.register : t.auth.loginBtn}
+              </button>
+            </p>
           </form>
         </div>
       </div>
@@ -199,12 +230,27 @@ function AuthView() {
 
 // --- USER PROFILE & CRM VIEW ---
 function ProfileView() {
-  const { t, theme, currentUser, appointments } = useApp();
+  const { t, theme, currentUser, appointments, addNotification } = useApp();
+  const [phoneInput, setPhoneInput] = useState("");
   const isHeritage = theme === 'heritage';
   const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
   const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
 
+  useEffect(() => {
+    if (currentUser?.phone) setPhoneInput(currentUser.phone);
+  }, [currentUser]);
+
   if (!currentUser) return null;
+
+  const handleSavePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), { phone: phoneInput });
+      addNotification("Phone number saved successfully!", "success");
+    } catch (err: any) {
+      addNotification("Failed to save phone number", "error");
+    }
+  };
 
   const userAppointments = appointments.filter(a => a.userId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const upcoming = userAppointments.filter(a => a.status === 'pending');
@@ -217,9 +263,28 @@ function ProfileView() {
          <p className="text-gray-400 text-sm md:text-base">Welcome back, {currentUser.name}</p>
       </div>
 
+      <div className={`p-8 mb-6 border rounded-sm shadow-xl ${bgBorder}`}>
+        <h3 className="text-xl font-bold mb-2">Contact Information</h3>
+        <p className="text-sm text-gray-400 mb-4">Set your phone number so it automatically fills in when booking appointments and receiving SMS reminders.</p>
+        <form onSubmit={handleSavePhone} className="flex gap-4">
+          <input 
+            type="tel" 
+            value={phoneInput} 
+            onChange={(e) => setPhoneInput(e.target.value)} 
+            placeholder="+49..." 
+            className="flex-1 bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
+            required
+          />
+          <button type="submit" className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>
+            Save Phone
+          </button>
+        </form>
+      </div>
+
       <div className={`p-8 mb-10 border rounded-sm shadow-xl ${bgBorder}`}>
         <h3 className="text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
         <p className="text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
+        
         <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
           <div 
             className={`h-full transition-all duration-1000 ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`} 
@@ -258,6 +323,7 @@ function ProfileView() {
                   </div>
                   <span className="text-xs uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Completed</span>
                 </div>
+                
                 <div className="mt-4 p-4 bg-black/40 border border-white/5 rounded-sm">
                   <h4 className={`text-xs uppercase font-bold tracking-widest mb-2 ${primaryColor}`}>{t.profile.notesLabel}</h4>
                   <p className="text-sm text-gray-300 leading-relaxed italic">
@@ -274,7 +340,7 @@ function ProfileView() {
   );
 }
 
-// --- ADMIN DASHBOARD ---
+// --- ADMIN DASHBOARD (CRUD & TRANSLATIONS) ---
 function AdminView() {
   const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang } = useApp();
   const [tab, setTab] = useState<'appointments' | 'services' | 'products' | 'translations'>('appointments');
@@ -311,7 +377,7 @@ function AdminView() {
       {tab === 'translations' && (
         <div className={`p-6 border rounded-sm ${bgBorder} max-w-xl`}>
           <h3 className="text-xl font-bold mb-2">Dynamic Translation Editor</h3>
-          <p className="text-sm text-gray-400 mb-6">Edit texts for the currently active language ({lang.toUpperCase()}).</p>
+          <p className="text-sm text-gray-400 mb-6">Edit texts for the currently active language ({lang.toUpperCase()}). Changes save to Database.</p>
           <form onSubmit={handleSaveTrans} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -323,7 +389,7 @@ function AdminView() {
               <div>
                 <label className="block text-xs uppercase text-gray-400 mb-2">Key</label>
                 <select value={transKey} onChange={(e)=>setTransKey(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm">
-                  {t[transSection] && typeof t[transSection] === 'object' ? 
+                  {t[transSection] && typeof t[transSection] === 'object' && !Array.isArray(t[transSection]) ? 
                     Object.keys(t[transSection]).map(k => <option key={k} value={k}>{k}</option>) : <option value="title">title</option>
                   }
                 </select>
@@ -333,7 +399,7 @@ function AdminView() {
                <label className="block text-xs uppercase text-gray-400 mb-2">New Text Value</label>
                <textarea required value={transVal} onChange={(e)=>setTransVal(e.target.value)} rows={3} className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" placeholder="Enter new text here..."></textarea>
             </div>
-            <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Save to State</button>
+            <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Save to Cloud</button>
           </form>
         </div>
       )}
@@ -343,10 +409,13 @@ function AdminView() {
           <h3 className="text-lg md:text-xl font-bold mb-6">Reservation Management</h3>
           <div className="space-y-6">
             {[...appointments].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(a => (
-              <div key={a.id} className="bg-black/50 p-4 md:p-6 border border-white/10 flex flex-col gap-4 rounded-sm">
+              <div key={a.id} className={`bg-black/50 p-4 md:p-6 border flex flex-col gap-4 rounded-sm ${a.isEmergency && a.status === 'pending' ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
-                    <p className="font-bold text-base md:text-lg">{a.name} <span className="text-sm text-gray-400 font-normal">({a.phone})</span></p>
+                    <p className="font-bold text-base md:text-lg">
+                      {a.name} <span className="text-sm text-gray-400 font-normal">({a.phone})</span>
+                      {a.isEmergency && a.status === 'pending' && <span className="ml-3 bg-red-600 text-white text-[10px] tracking-widest px-2 py-1 rounded-sm animate-pulse uppercase">Emergency Request</span>}
+                    </p>
                     <p className="text-sm text-gray-300">{a.service} {a.usedReward && <span className="text-green-400 font-bold ml-2">(Used 50% Reward)</span>}</p>
                     <p className="text-sm text-gray-300">Stylist: {a.stylist} — {a.date} at {a.time}</p>
                     <p className={`text-xs mt-2 border inline-block px-2 py-1 rounded ${a.sendsms ? 'border-green-500/50 text-green-400' : 'border-red-500/50 text-red-400'}`}>
@@ -398,7 +467,7 @@ function AdminView() {
               <input required name="name" type="text" placeholder="Service Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               <div className="grid grid-cols-2 gap-4">
                 <input required name="price" type="text" placeholder="Price (30 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-                <input required name="oldPrice" type="text" placeholder="Old Price" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+                <input name="oldPrice" type="text" placeholder="Old Price" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               </div>
               <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Add Service</button>
             </form>
@@ -448,13 +517,27 @@ function AdminView() {
 
 // --- PUBLIC BOOKING VIEW ---
 function BookingView() {
-  const { t, theme, lang, currentUser, addAppointment, servicesDB, availableSlots } = useApp();
+  const { t, theme, lang, currentUser, addAppointment, servicesDB, getAvailableSlots } = useApp();
   const [submitted, setSubmitted] = useState(false);
+  
+  // Fully unlocked, editable fields synced with the user profile
+  const [bookingName, setBookingName] = useState("");
+  const [bookingPhone, setBookingPhone] = useState("");
+  const [bookingDate, setBookingDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [useReward, setUseReward] = useState(false);
+  const [isEmergency, setIsEmergency] = useState(false);
+
   const isHeritage = theme === 'heritage';
 
-  const openSlots = availableSlots.filter(slot => !slot.isBooked);
+  useEffect(() => {
+    if (currentUser) {
+      setBookingName(currentUser.name || "");
+      setBookingPhone(currentUser.phone || "");
+    }
+  }, [currentUser]);
+
+  const openSlots = getAvailableSlots(bookingDate);
   const hasReward = currentUser && currentUser.haircutCount >= 10;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -464,21 +547,26 @@ function BookingView() {
     const target = e.target as typeof e.target & {
       service: { value: string };
       stylist: { value: string };
-      date: { value: string };
       sendsms: { checked: boolean };
     };
 
-    addAppointment({
+    // If the user typed a new phone number or name here, save it to their profile automatically!
+    if (bookingPhone !== currentUser.phone || bookingName !== currentUser.name) {
+      await updateDoc(doc(db, 'users', currentUser.id), { phone: bookingPhone, name: bookingName });
+    }
+
+    await addAppointment({
       userId: currentUser.id,
-      name: currentUser.name,
-      phone: currentUser.phone,
+      name: bookingName,
+      phone: bookingPhone,
       service: target.service.value,
       stylist: target.stylist.value,
-      date: target.date.value,
+      date: bookingDate,
       time: openSlots.find(s => s.id === selectedSlot)?.time || '00:00',
       status: 'pending',
       sendsms: target.sendsms.checked,
-      usedReward: useReward
+      usedReward: useReward,
+      isEmergency: isEmergency
     });
     
     setSubmitted(true);
@@ -506,7 +594,7 @@ function BookingView() {
           {submitted ? (
             <div className={`p-8 md:p-10 border rounded-sm text-center animate-in zoom-in-95 duration-500 ${isHeritage ? 'border-[#c5a059] bg-[#c5a059]/10 text-[#c5a059]' : 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'}`}>
               <p className="font-semibold text-lg md:text-xl mb-6">{t.booking.success}</p>
-              <button onClick={() => { setSubmitted(false); setSelectedSlot(""); setUseReward(false); }} className="text-xs md:text-sm uppercase font-bold underline text-gray-300 hover:text-white transition-colors p-2">
+              <button onClick={() => { setSubmitted(false); setSelectedSlot(""); setUseReward(false); setIsEmergency(false); }} className="text-xs md:text-sm uppercase font-bold underline text-gray-300 hover:text-white transition-colors p-2">
                 {lang === 'de' ? 'Weiteren Termin anfragen' : 'Request another appointment'}
               </button>
             </div>
@@ -523,14 +611,26 @@ function BookingView() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6 opacity-60">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.name}</label>
-                  <input disabled value={currentUser?.name || ''} type="text" className="w-full bg-black/50 border border-white/10 rounded-sm p-4 outline-none text-base cursor-not-allowed" />
+                  <input 
+                    required 
+                    value={bookingName} 
+                    onChange={e => setBookingName(e.target.value)} 
+                    type="text" 
+                    className={`w-full border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.phone}</label>
-                  <input disabled value={currentUser?.phone || ''} type="tel" className="w-full bg-black/50 border border-white/10 rounded-sm p-4 outline-none text-base cursor-not-allowed" />
+                  <input 
+                    required 
+                    value={bookingPhone} 
+                    onChange={e => setBookingPhone(e.target.value)} 
+                    type="tel" 
+                    className={`w-full border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                  />
                 </div>
               </div>
               
@@ -552,30 +652,50 @@ function BookingView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.date} *</label>
-                  <input required name="date" type="date" className={`w-full border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+                  <input 
+                    required 
+                    type="date" 
+                    value={bookingDate}
+                    onChange={e => { setBookingDate(e.target.value); setSelectedSlot(""); }}
+                    className={`w-full border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                  />
+                  
+                  {/* Emergency Toggle */}
+                  <div className="mt-4 flex items-start gap-3 p-3 border border-red-500/50 bg-red-500/10 rounded-sm">
+                    <input type="checkbox" id="emergency" checked={isEmergency} onChange={(e) => setIsEmergency(e.target.checked)} className="mt-1 w-4 h-4 cursor-pointer accent-red-500" />
+                    <label htmlFor="emergency" className="text-xs font-bold text-red-400 cursor-pointer">
+                      Emergency Haircut (Request admin to overbook a taken slot)
+                    </label>
+                  </div>
                 </div>
+
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.time} *</label>
-                  <input required name="time" type="hidden" value={selectedSlot} />
-                  {openSlots.length > 0 ? (
+                  {bookingDate ? (
                     <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 md:gap-3">
-                      {openSlots.map((slot: TimeSlot) => (
-                        <button
-                          key={slot.id}
-                          type="button"
-                          onClick={() => setSelectedSlot(slot.id)}
-                          className={`py-3 px-2 rounded-sm border text-sm font-medium transition-colors ${
-                            selectedSlot === slot.id 
-                              ? (isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black') 
-                              : (isHeritage ? 'border-[#c5a059]/30 text-gray-400 hover:border-[#c5a059]' : 'border-white/20 text-gray-400 hover:border-[#d4af37]')
-                          }`}
-                        >
-                          {slot.time}
-                        </button>
-                      ))}
+                      {openSlots.map((slot: TimeSlot) => {
+                        const isDisabled = slot.isBooked && !isEmergency;
+                        return (
+                          <button
+                            key={slot.id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => setSelectedSlot(slot.id)}
+                            className={`py-3 px-2 rounded-sm border text-[10px] sm:text-xs font-medium transition-colors ${isDisabled ? 'opacity-20 cursor-not-allowed' : ''} ${
+                              selectedSlot === slot.id 
+                                ? (isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black') 
+                                : (isHeritage ? 'border-[#c5a059]/30 text-gray-400 hover:border-[#c5a059]' : 'border-white/20 text-gray-400 hover:border-[#d4af37]')
+                            }`}
+                          >
+                            {slot.time} {slot.isBooked && isEmergency && <span className="block text-[8px] text-red-400">OVERBOOK</span>}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <p className="text-red-400 text-xs py-2">{t.booking.noSlots}</p>
+                    <div className="h-full border border-dashed border-white/10 rounded-sm flex items-center justify-center p-4">
+                      <p className="text-gray-500 text-xs text-center">Please select a date to view available time slots.</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -595,7 +715,7 @@ function BookingView() {
                 disabled={!selectedSlot}
                 className={`w-full py-4 md:py-5 rounded-sm font-bold uppercase tracking-widest text-xs md:text-sm transition-all mt-8 disabled:opacity-50 ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}
               >
-                {useReward ? "Kostenlos Buchen (50% Off)" : t.booking.submit}
+                {useReward ? "Kostenlos Buchen (50% Off)" : isEmergency ? "Request Emergency Overbook" : t.booking.submit}
               </button>
             </form>
           )}
@@ -739,7 +859,7 @@ function MainContent() {
             <div className="relative h-[30vh] md:h-[40vh] w-full flex items-center justify-center overflow-hidden mb-12">
               <div className="absolute inset-0 bg-black/60 z-10" />
               <img src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=1600&q=80" className="absolute inset-0 w-full h-full object-cover grayscale-30" />
-              <div className="relative z-20 text-center px-4">
+              <div className="relative z-20 text-center px-4 animate-in slide-in-from-bottom-8 duration-1000">
                 <h2 className={`text-3xl md:text-6xl font-bold mb-2 ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'uppercase tracking-tighter'}`}>{t.services.title}</h2>
                 <p className={`tracking-[0.2em] uppercase text-xs md:text-sm ${isHeritage ? 'text-gray-300' : 'text-[#d4af37]'}`}>{t.services.subtitle}</p>
               </div>
