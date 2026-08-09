@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 type Language = 'de' | 'en';
@@ -52,8 +52,8 @@ export interface AppContextType {
 }
 
 const fallbackTranslations: TranslationData = {
-  de: { nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" }, hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag" }, gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?" }, booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir bestätigen Ihren Termin in Kürze." }, profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern" }, promo: "Schüler- & Studentenangebot (Dienstag): 16 €" },
-  en: { nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "My Profile" }, hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." }, about: { title: "About Us", text: "Welcome to Rebo Salon." }, services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday" }, gallery: { title: "Our Work", subtitle: "Inside the salon", images: [] }, products: { title: "Store & Products", subtitle: "Professional care for home" }, contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?" }, booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We will confirm your appointment shortly." }, profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note" }, promo: "Student Special (Tuesday): 16 €" }
+  de: { nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" }, hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag" }, gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?" }, booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet." }, profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern" }, promo: "Schüler- & Studentenangebot (Dienstag): 16 €" },
+  en: { nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "My Profile" }, hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." }, about: { title: "About Us", text: "Welcome to Rebo Salon." }, services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday" }, gallery: { title: "Our Work", subtitle: "Inside the salon", images: [] }, products: { title: "Store & Products", subtitle: "Professional care for home" }, contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?" }, booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt." }, profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note" }, promo: "Student Special (Tuesday): 16 €" }
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -71,6 +71,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [productsDB, setProductsDB] = useState<ProductItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
+  const apiSecretHeader = {
+    'Content-Type': 'application/json',
+    'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET || ''
+  };
 
   const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     const id = Date.now();
@@ -91,6 +97,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (currentUser && page === 'auth') {
+      setPageRouter('profile');
+    }
+  }, [currentUser, page]);
 
   const setPageRouter = (newPage: Page) => {
     if (newPage !== page) {
@@ -151,10 +163,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getAvailableSlots = (date: string) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
-    const bookedForDate = appointments
-      .filter(a => (a.status === 'confirmed' || a.status === 'pending') && a.date === date)
-      .map(a => a.time);
-    return initialSlots.map(s => ({ ...s, isBooked: bookedForDate.includes(s.time) }));
+    
+    const bookedTimes = appointments.reduce((acc: string[], a) => {
+      if ((a.status === 'confirmed' || a.status === 'pending') && a.date === date) {
+        acc.push(a.time);
+      }
+      if (a.status === 'proposed' && a.proposedDate === date && a.proposedTime) {
+        acc.push(a.proposedTime);
+      }
+      return acc;
+    }, []);
+
+    return initialSlots.map(s => ({ ...s, isBooked: bookedTimes.includes(s.time) }));
   };
 
   const loginOAuth = async (providerName: 'Google' | 'Facebook') => {
@@ -177,16 +197,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const registerEmail = async (email: string, pass: string, name: string, phone?: string) => {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      
+      const cleanPhone = phone ? phone.replace(/\s+/g, '') : '';
       await setDoc(doc(db, 'users', cred.user.uid), { 
-        id: cred.user.uid, 
-        name, 
-        email, 
-        phone: phone || '', 
-        haircutCount: 0, 
-        role: 'user' 
+        id: cred.user.uid, name, email, phone: cleanPhone, haircutCount: 0, role: 'user' 
       });
-      
       setPageRouter('profile');
       addNotification("Account created and verified successfully!", 'success');
     } catch (error: any) { 
@@ -219,6 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) return;
     
     await addDoc(collection(db, 'appointments'), appt);
+    
     const userRef = doc(db, 'users', currentUser.id);
     if (appt.usedReward) {
       await updateDoc(userRef, { haircutCount: Math.max(0, currentUser.haircutCount - 10) });
@@ -226,16 +241,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
     }
     
-    // ADMIN NOTIFICATION VIA EMAIL (Replaces Twilio SMS)
-    const ADMIN_EMAIL = 'rick.maity07@gmail.com'; 
+    try {
+      await fetch('/api/email', {
+        method: 'POST',
+        headers: apiSecretHeader,
+        body: JSON.stringify({
+          email: currentUser.email,
+          subject: "Rebo Salon: Buchungsanfrage erhalten",
+          message: `Hallo ${appt.name},\n\nDeine Anfrage für ${appt.service} am ${appt.date} um ${appt.time} Uhr wurde an den Salon übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit und werden deinen Termin in Kürze bestätigen.\n\nDein Rebo Salon Team`
+        })
+      });
+    } catch (e) {
+      console.error("User request confirmation email failed");
+    }
+
     try {
       await fetch('/api/email', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        headers: apiSecretHeader, 
         body: JSON.stringify({ 
-          email: ADMIN_EMAIL, 
+          email: adminEmail, 
           subject: "🚨 Neuer Termin eingegangen!",
-          message: `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistung: ${appt.service}\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen oder abzulehnen.` 
+          message: `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistung: ${appt.service}\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen, abzulehnen oder zu verschieben.` 
         }) 
       });
     } catch (e) {
@@ -246,58 +273,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => {
+    const appt = appointments.find(a => a.id === id);
+    if (!appt) return;
+
     const updates: any = { status };
     if (notes !== undefined) updates.notes = notes;
     if (proposedDate) updates.proposedDate = proposedDate;
     if (proposedTime) updates.proposedTime = proposedTime;
     
     await updateDoc(doc(db, 'appointments', id), updates);
-    
-    const appt = appointments.find(a => a.id === id);
-    if (!appt) return;
 
-    if (status === 'confirmed') {
-        // --- SEND TWILIO SMS ---
+    if (status === 'cancelled' && appt.status !== 'cancelled') {
+      const userRef = doc(db, 'users', appt.userId);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        const uData = userDoc.data();
+        if (appt.usedReward) {
+          await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 }); 
+        } else {
+          await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) }); 
+        }
+      }
+    }
+
+    const userDoc = await getDoc(doc(db, 'users', appt.userId));
+    const userEmail = userDoc.exists() ? userDoc.data().email : null;
+
+    if (status === 'confirmed' && appt.status !== 'confirmed') {
         if (sendsms && appt.phone) {
           try {
+            const cleanPhone = appt.phone.replace(/\s+/g, '');
             const smsText = `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!`;
-            await fetch('/api/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: appt.phone, message: smsText }) });
+            await fetch('/api/sms', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ phone: cleanPhone, message: smsText }) });
           } catch (e) { console.error("SMS failed"); }
         }
         
-        // --- SEND GMAIL CONFIRMATION ---
-        try {
-          const userDoc = await getDoc(doc(db, 'users', appt.userId));
-          if (userDoc.exists() && userDoc.data().email) {
-            const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
-            await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userDoc.data().email, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
-            addNotification("Status aktualisiert & E-Mail gesendet!", 'success');
-          } else {
-             addNotification("Status aktualisiert (Keine E-Mail gefunden)", 'success');
-          }
-        } catch (e) { addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error'); }
+        if (userEmail) {
+          try {
+            const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist offiziell bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
+            await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
+            addNotification("Status aktualisiert & Bestätigungs-E-Mail gesendet!", 'success');
+          } catch (e) { addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error'); }
+        }
         
-    } else if (status === 'proposed') {
-        // --- SEND PROPOSAL EMAIL ---
-        try {
-          const userDoc = await getDoc(doc(db, 'users', appt.userId));
-          if (userDoc.exists() && userDoc.data().email) {
-            const emailText = `Hallo ${appt.name},\n\nWir können deinen Termin am ${appt.date} um ${appt.time} leider nicht wahrnehmen.\n\nWir schlagen stattdessen vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte logge dich auf unserer Webseite ein, um diesen neuen Termin zu akzeptieren oder abzulehnen.\n\nDein Rebo Salon Team`;
+    } else if (status === 'cancelled' && appt.status !== 'cancelled') {
+        if (userEmail) {
+          try {
+            const emailText = `Hallo ${appt.name},\n\nLeider mussten wir deine Termin Anfrage für den ${appt.date} um ${appt.time} Uhr absagen oder stornieren.\n\nBitte versuche einen anderen Termin auf unserer Webseite zu buchen.\n\nDein Rebo Salon Team`;
+            await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminabsage", message: emailText }) });
+            addNotification("Termin abgelehnt & Absage-E-Mail gesendet!", 'info');
+          } catch (e) { console.error("Cancellation email failed"); }
+        }
+
+    } else if (status === 'proposed' && appt.status !== 'proposed') {
+        if (userEmail) {
+          try {
+            const emailText = `Hallo ${appt.name},\n\nWir können deinen Termin am ${appt.date} um ${appt.time} leider nicht zur gewählten Zeit wahrnehmen.\n\nWir schlagen stattdessen vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte logge dich auf unserer Webseite in dein Profil ein, um diesen neuen Termin zu akzeptieren oder abzulehnen.\n\nDein Rebo Salon Team`;
             
             await fetch('/api/email', { 
               method: 'POST', 
-              headers: { 'Content-Type': 'application/json' }, 
-              body: JSON.stringify({ 
-                email: userDoc.data().email, 
-                subject: "Rebo Salon: Terminvorschlag / Action Required", 
-                message: emailText 
-              }) 
+              headers: apiSecretHeader, 
+              body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminvorschlag / Action Required", message: emailText }) 
             });
             addNotification("Neuer Termin vorgeschlagen & E-Mail an Kunden gesendet!", 'info');
-          }
-        } catch (e) { addNotification("Vorschlag gespeichert, aber E-Mail fehlgeschlagen.", 'error'); }
+          } catch (e) { addNotification("Vorschlag gespeichert, aber E-Mail fehlgeschlagen.", 'error'); }
+        }
         
-    } else if (notes) { 
+    } else if (notes !== undefined) { 
       addNotification("Notizen gespeichert.", 'success'); 
     }
   };

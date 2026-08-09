@@ -1,38 +1,36 @@
 import { NextResponse } from 'next/server';
 import twilio from 'twilio';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+export async function POST(req: Request) {
+  const authHeader = req.headers.get('x-internal-secret');
+  if (process.env.NEXT_PUBLIC_INTERNAL_API_SECRET && authHeader !== process.env.NEXT_PUBLIC_INTERNAL_API_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized request' }, { status: 401 });
+  }
 
-export async function POST(request: Request) {
   try {
-    const { phone, message } = await request.json();
+    const { phone, message } = await req.json();
+    if (!phone || !message) return NextResponse.json({ error: 'Phone and message are required' }, { status: 400 });
 
-    if (!phone) {
-      return NextResponse.json({ success: false, error: 'Missing phone number' }, { status: 400 });
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !twilioPhone) {
+      return NextResponse.json({ error: 'Twilio credentials not configured' }, { status: 500 });
     }
 
     const client = twilio(accountSid, authToken);
-
-    // Format phone number to ensure E.164 standard (+49 for Germany)
-    let formattedPhone = phone.trim();
-    if (formattedPhone.startsWith('0')) {
-      formattedPhone = '+49' + formattedPhone.slice(1);
-    } else if (!formattedPhone.startsWith('+')) {
-      formattedPhone = '+49' + formattedPhone;
-    }
+    const cleanPhone = phone.replace(/\s+/g, '');
 
     const response = await client.messages.create({
-      // We are now passing the actual custom text message here!
       body: message,
       from: twilioPhone,
-      to: formattedPhone,
+      to: cleanPhone,
     });
 
-    return NextResponse.json({ success: true, sid: response.sid });
+    return NextResponse.json({ success: true, sid: response.sid }, { status: 200 });
   } catch (error: any) {
-    console.error('Twilio Error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('SMS API Error:', error);
+    return NextResponse.json({ error: error.message || 'Failed to send SMS' }, { status: 500 });
   }
 }
