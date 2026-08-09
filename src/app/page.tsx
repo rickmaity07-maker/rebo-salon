@@ -109,7 +109,7 @@ function Navbar() {
         </div>
       </div>
 
-      {/* MOBILE MENU DROPDOWN (Fullscreen Overlay for Mobile Optimization) */}
+      {/* MOBILE MENU DROPDOWN */}
       {mobileMenuOpen && (
         <div className={`lg:hidden fixed inset-x-0 top-20 bottom-0 h-[calc(100dvh-5rem)] overflow-y-auto px-6 flex flex-col animate-in slide-in-from-top-2 duration-300 z-40 ${isHeritage ? 'bg-[#141310] border-t border-[#c5a059]/30' : 'bg-black border-t border-white/10'}`}>
           
@@ -169,11 +169,9 @@ function AuthView() {
   const [pass, setPass] = useState('');
   const [name, setName] = useState('');
   
-  // Registration Phone Fields
   const [countryCode, setCountryCode] = useState('+49');
   const [phoneInput, setPhoneInput] = useState('');
 
-  // Custom OTP Verification States (Email ONLY)
   const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
   const [generatedEmailOTP, setGeneratedEmailOTP] = useState('');
   const [inputEmailOTP, setInputEmailOTP] = useState('');
@@ -190,12 +188,10 @@ function AuthView() {
         return;
       }
       
-      // 1. Generate one random 6-digit code for Email
       const eOTP = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedEmailOTP(eOTP);
-      setIsVerifyingOTP(true); // Open the Modal
+      setIsVerifyingOTP(true); 
       
-      // 2. Send the Email OTP using Nodemailer
       try {
         await fetch('/api/email', {
           method: 'POST',
@@ -217,7 +213,6 @@ function AuthView() {
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputEmailOTP === generatedEmailOTP) {
-      // MATCH! Now we finally create the account in Firebase.
       const fullPhone = `${countryCode}${phoneInput}`.trim();
       setIsVerifyingOTP(false);
       await registerEmail(email, pass, name, fullPhone);
@@ -229,7 +224,6 @@ function AuthView() {
   return (
     <div className="flex min-h-screen pt-20 relative">
       
-      {/* EMAIL OTP MODAL OVERLAY */}
       {isVerifyingOTP && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
@@ -274,7 +268,6 @@ function AuthView() {
                 <>
                   <input required type="text" value={name} onChange={e=>setName(e.target.value)} placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
                   
-                  {/* Country Code & Phone Input for Registration */}
                   <div className="flex gap-2">
                     <select 
                       value={countryCode} 
@@ -305,7 +298,6 @@ function AuthView() {
               {isLogin ? t.auth.loginBtn : t.auth.registerTitle}
             </button>
 
-            {/* Forgot Password Button */}
             {isLogin && (
               <button 
                 type="button" 
@@ -345,7 +337,7 @@ function AuthView() {
 
 // --- USER PROFILE & CRM VIEW ---
 function ProfileView() {
-  const { t, theme, currentUser, appointments, addNotification } = useApp();
+  const { t, theme, currentUser, appointments, updateAppointmentStatus, addNotification } = useApp();
   
   const [countryCode, setCountryCode] = useState("+49");
   const [phoneInput, setPhoneInput] = useState("");
@@ -385,6 +377,8 @@ function ProfileView() {
   };
 
   const userAppointments = appointments.filter(a => a.userId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  const proposed = userAppointments.filter(a => a.status === 'proposed');
   const upcoming = userAppointments.filter(a => a.status === 'pending');
   const past = userAppointments.filter(a => a.status === 'confirmed');
 
@@ -394,6 +388,51 @@ function ProfileView() {
          <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
          <p className="text-gray-400 text-sm md:text-base">Welcome back, {currentUser.name}</p>
       </div>
+
+      {/* ACTION REQUIRED: Proposed Reschedules */}
+      {proposed.length > 0 && (
+        <div className="mb-10">
+          <h3 className="text-lg md:text-xl font-bold mb-4 text-blue-400 flex items-center gap-2">
+             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+             Action Required
+          </h3>
+          <div className="space-y-4">
+            {proposed.map(a => (
+              <div key={a.id} className="p-6 border border-blue-500/50 bg-blue-500/10 rounded-sm shadow-xl">
+                <p className="text-sm text-gray-300 mb-4 leading-relaxed">
+                  We cannot accommodate your original request for <strong className="text-white">{a.service} on {a.date} at {a.time}</strong>. <br/>
+                  We propose rescheduling to:
+                </p>
+                <div className="bg-black/50 p-4 border border-blue-500/30 rounded-sm mb-6 inline-block">
+                  <p className="font-mono text-xl font-bold text-blue-400">{a.proposedDate} <span className="text-gray-500 mx-2">|</span> {a.proposedTime}</p>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={async () => {
+                    await updateDoc(doc(db, 'appointments', a.id), { status: 'confirmed', date: a.proposedDate, time: a.proposedTime });
+                    
+                    try {
+                      await fetch('/api/email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: currentUser.email,
+                          subject: "Rebo Salon: Termin bestätigt (Neuer Termin)",
+                          message: `Hallo ${currentUser.name},\n\nDein neuer Termin für ${a.service} am ${a.proposedDate} um ${a.proposedTime} Uhr wurde erfolgreich bestätigt!\n\nWir freuen uns auf dich.\nDein Rebo Salon Team`
+                        })
+                      });
+                    } catch (err) {
+                      console.error("Confirmation email failed to send");
+                    }
+
+                    addNotification("Reschedule Accepted! Confirmation email sent.", "success");
+                  }} className="bg-blue-500 text-black px-6 py-3 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-colors">Accept New Time</button>
+                  <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 px-6 py-3 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-red-500/20 transition-colors">Decline & Cancel</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={`p-6 md:p-8 mb-6 border rounded-sm shadow-xl ${bgBorder}`}>
         <h3 className="text-lg md:text-xl font-bold mb-2">Contact Information</h3>
@@ -486,9 +525,12 @@ function ProfileView() {
 
 // --- ADMIN DASHBOARD (CRUD & TRANSLATIONS) ---
 function AdminView() {
-  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang } = useApp();
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang, getAvailableSlots } = useApp();
   const [tab, setTab] = useState<'appointments' | 'services' | 'products' | 'translations'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
+  
+  const [isRescheduling, setIsRescheduling] = useState<{[key:string]: boolean}>({});
+  const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
   
   const [transSection, setTransSection] = useState('hero');
   const [transKey, setTransKey] = useState('title');
@@ -554,7 +596,7 @@ function AdminView() {
           <div className="space-y-6">
             {[...appointments].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(a => (
               <div key={a.id} className={`bg-black/50 p-4 md:p-6 border flex flex-col gap-4 rounded-sm ${a.isEmergency && a.status === 'pending' ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                   <div>
                     <p className="font-bold text-base md:text-lg">
                       {a.name} <span className="text-sm text-gray-400 font-normal">({a.phone})</span>
@@ -565,19 +607,63 @@ function AdminView() {
                     <p className={`text-xs mt-2 border inline-block px-2 py-1 rounded ${a.sendsms ? 'border-green-500/50 text-green-400' : 'border-red-500/50 text-red-400'}`}>
                       {a.sendsms ? 'SMS Reminder Requested' : 'No SMS Requested'}
                     </p>
-                    <p className={`text-sm mt-3 font-bold ${a.status === 'confirmed' ? 'text-green-400' : a.status === 'cancelled' ? 'text-red-400' : 'text-yellow-400'}`}>
-                      Status: {a.status.toUpperCase()}
+                    <p className={`text-sm mt-3 font-bold ${a.status === 'confirmed' ? 'text-green-400' : a.status === 'cancelled' ? 'text-red-400' : a.status === 'proposed' ? 'text-blue-400' : 'text-yellow-400'}`}>
+                      Status: {a.status.toUpperCase()} {a.status === 'proposed' && `(${a.proposedDate} at ${a.proposedTime})`}
                     </p>
                   </div>
-                  <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                  <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
                     {a.status === 'pending' && (
                       <>
                         <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', a.sendsms)} className="flex-1 md:flex-none bg-green-600/20 text-green-400 border border-green-600 px-4 py-3 text-xs font-bold uppercase hover:bg-green-600 hover:text-white transition-colors rounded-sm">Confirm</button>
                         <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="flex-1 md:flex-none bg-red-600/20 text-red-400 border border-red-600 px-4 py-3 text-xs font-bold uppercase hover:bg-red-600 hover:text-white transition-colors rounded-sm">Reject</button>
+                        <button onClick={() => setIsRescheduling({...isRescheduling, [a.id]: !isRescheduling[a.id]})} className="flex-1 md:flex-none bg-blue-600/20 text-blue-400 border border-blue-600 px-4 py-3 text-xs font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors rounded-sm w-full md:w-auto mt-2 md:mt-0">Reschedule</button>
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* THE ADMIN RESCHEDULE CALENDAR OVERLAY */}
+                {isRescheduling[a.id] && (
+                  <div className="mt-4 p-5 border border-blue-500/30 bg-blue-500/10 rounded-sm">
+                    <p className="text-xs uppercase tracking-widest text-blue-400 font-bold mb-4">Propose New Time</p>
+                    <input 
+                      type="date" 
+                      className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm mb-4 text-white"
+                      onChange={e => setRescheduleData({...rescheduleData, [a.id]: { ...rescheduleData[a.id], date: e.target.value }})}
+                    />
+                    
+                    {rescheduleData[a.id]?.date ? (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-6">
+                        {getAvailableSlots(rescheduleData[a.id]?.date).map(slot => (
+                          <button 
+                            key={slot.id} 
+                            disabled={slot.isBooked}
+                            onClick={() => setRescheduleData({...rescheduleData, [a.id]: { ...rescheduleData[a.id], time: slot.time }})}
+                            className={`py-2 px-1 text-[10px] sm:text-xs rounded-sm border font-medium transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed border-white/10 text-gray-500' : rescheduleData[a.id]?.time === slot.time ? 'bg-blue-500 text-black border-blue-500' : 'border-white/20 text-gray-300 hover:border-blue-400'}`}
+                          >
+                            {slot.time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 mb-4 italic">Select a date to view available slots.</p>
+                    )}
+                    
+                    <div className="flex gap-3">
+                      <button 
+                        disabled={!rescheduleData[a.id]?.time}
+                        onClick={() => {
+                          updateAppointmentStatus(a.id, 'proposed', false, undefined, rescheduleData[a.id]?.date, rescheduleData[a.id]?.time);
+                          setIsRescheduling({...isRescheduling, [a.id]: false});
+                        }} 
+                        className="bg-blue-500 text-black px-4 py-3 text-xs font-bold uppercase rounded-sm w-full disabled:opacity-50"
+                      >
+                        Send Proposal Email
+                      </button>
+                      <button onClick={() => setIsRescheduling({...isRescheduling, [a.id]: false})} className="border border-white/20 text-gray-300 px-4 py-3 text-xs uppercase font-bold rounded-sm w-full hover:bg-white/5">Cancel</button>
+                    </div>
+                  </div>
+                )}
                 
                 {a.status === 'confirmed' && (
                   <div className="mt-2 pt-4 border-t border-gray-800">

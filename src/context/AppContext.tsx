@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 type Language = 'de' | 'en';
@@ -9,7 +9,15 @@ type Theme = 'modern' | 'heritage';
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
 export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin' };
-export type Appointment = { id: string; userId: string; name: string; phone: string; service: string; stylist: string; date: string; time: string; status: 'pending' | 'confirmed' | 'cancelled'; sendsms: boolean; usedReward: boolean; notes?: string; isEmergency?: boolean; };
+
+export type Appointment = { 
+  id: string; userId: string; name: string; phone: string; service: string; stylist: string; 
+  date: string; time: string; 
+  status: 'pending' | 'confirmed' | 'cancelled' | 'proposed'; 
+  proposedDate?: string; proposedTime?: string;
+  sendsms: boolean; usedReward: boolean; notes?: string; isEmergency?: boolean; 
+};
+
 export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string };
 export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
 export type Notification = { id: number; message: string; type: 'success' | 'info' | 'error' };
@@ -36,7 +44,7 @@ export interface AppContextType {
   logout: () => void;
   appointments: Appointment[]; 
   addAppointment: (appt: Omit<Appointment, 'id'>) => Promise<void>;
-  updateAppointmentStatus: (id: string, status: Appointment['status'], sendsms: boolean, notes?: string) => Promise<void>;
+  updateAppointmentStatus: (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => Promise<void>;
   servicesDB: ServiceItem[]; addService: (s: Omit<ServiceItem, 'id'>) => Promise<void>; deleteService: (id: string) => Promise<void>;
   productsDB: ProductItem[]; addProduct: (p: Omit<ProductItem, 'id'>) => Promise<void>; deleteProduct: (id: string) => Promise<void>;
   notifications: Notification[]; addNotification: (msg: string, type?: 'success' | 'info' | 'error') => void;
@@ -144,7 +152,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getAvailableSlots = (date: string) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
     const bookedForDate = appointments
-      .filter(a => a.status !== 'cancelled' && a.date === date)
+      .filter(a => (a.status === 'confirmed' || a.status === 'pending') && a.date === date)
       .map(a => a.time);
     return initialSlots.map(s => ({ ...s, isBooked: bookedForDate.includes(s.time) }));
   };
@@ -166,7 +174,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) { addNotification(error.message, 'error'); }
   };
 
-  // The custom verification handles the security now!
   const registerEmail = async (email: string, pass: string, name: string, phone?: string) => {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -210,6 +217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addAppointment = async (appt: Omit<Appointment, 'id'>) => {
     if (!currentUser) return;
+    
     await addDoc(collection(db, 'appointments'), appt);
     const userRef = doc(db, 'users', currentUser.id);
     if (appt.usedReward) {
@@ -217,58 +225,78 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
     }
+    
+    // ADMIN NOTIFICATION VIA EMAIL (Replaces Twilio SMS)
+    const ADMIN_EMAIL = 'rick.maity07@gmail.com'; 
+    try {
+      await fetch('/api/email', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          email: ADMIN_EMAIL, 
+          subject: "🚨 Neuer Termin eingegangen!",
+          message: `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistung: ${appt.service}\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen oder abzulehnen.` 
+        }) 
+      });
+    } catch (e) {
+      console.error("Admin Notification Email Failed");
+    }
+
     addNotification("Appointment request sent!", 'success');
   };
 
-  const updateAppointmentStatus = async (id: string, status: Appointment['status'], sendsms: boolean, notes?: string) => {
+  const updateAppointmentStatus = async (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => {
     const updates: any = { status };
     if (notes !== undefined) updates.notes = notes;
+    if (proposedDate) updates.proposedDate = proposedDate;
+    if (proposedTime) updates.proposedTime = proposedTime;
+    
     await updateDoc(doc(db, 'appointments', id), updates);
     
+    const appt = appointments.find(a => a.id === id);
+    if (!appt) return;
+
     if (status === 'confirmed') {
-      const appt = appointments.find(a => a.id === id);
-      if (appt) {
-        
         // --- SEND TWILIO SMS ---
         if (sendsms && appt.phone) {
           try {
             const smsText = `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!`;
-            
-            await fetch('/api/sms', { 
-              method: 'POST', 
-              headers: { 'Content-Type': 'application/json' }, 
-              body: JSON.stringify({ phone: appt.phone, message: smsText }) 
-            });
-          } catch (e) { 
-            console.error("SMS failed"); 
-          }
+            await fetch('/api/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: appt.phone, message: smsText }) });
+          } catch (e) { console.error("SMS failed"); }
         }
         
         // --- SEND GMAIL CONFIRMATION ---
         try {
           const userDoc = await getDoc(doc(db, 'users', appt.userId));
           if (userDoc.exists() && userDoc.data().email) {
-            
             const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
-
+            await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userDoc.data().email, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
+            addNotification("Status aktualisiert & E-Mail gesendet!", 'success');
+          } else {
+             addNotification("Status aktualisiert (Keine E-Mail gefunden)", 'success');
+          }
+        } catch (e) { addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error'); }
+        
+    } else if (status === 'proposed') {
+        // --- SEND PROPOSAL EMAIL ---
+        try {
+          const userDoc = await getDoc(doc(db, 'users', appt.userId));
+          if (userDoc.exists() && userDoc.data().email) {
+            const emailText = `Hallo ${appt.name},\n\nWir können deinen Termin am ${appt.date} um ${appt.time} leider nicht wahrnehmen.\n\nWir schlagen stattdessen vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte logge dich auf unserer Webseite ein, um diesen neuen Termin zu akzeptieren oder abzulehnen.\n\nDein Rebo Salon Team`;
+            
             await fetch('/api/email', { 
               method: 'POST', 
               headers: { 'Content-Type': 'application/json' }, 
               body: JSON.stringify({ 
                 email: userDoc.data().email, 
-                subject: "Rebo Salon: Terminbestätigung",
+                subject: "Rebo Salon: Terminvorschlag / Action Required", 
                 message: emailText 
               }) 
             });
-            addNotification("Status aktualisiert & E-Mail gesendet!", 'success');
-          } else {
-             addNotification("Status aktualisiert (Keine E-Mail gefunden)", 'success');
+            addNotification("Neuer Termin vorgeschlagen & E-Mail an Kunden gesendet!", 'info');
           }
-        } catch (e) { 
-          console.error("Email failed", e); 
-          addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error');
-        }
-      }
+        } catch (e) { addNotification("Vorschlag gespeichert, aber E-Mail fehlgeschlagen.", 'error'); }
+        
     } else if (notes) { 
       addNotification("Notizen gespeichert.", 'success'); 
     }
