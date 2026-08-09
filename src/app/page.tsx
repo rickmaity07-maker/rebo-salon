@@ -111,34 +111,36 @@ function Navbar() {
 
       {/* MOBILE MENU DROPDOWN (Fullscreen Overlay for Mobile Optimization) */}
       {mobileMenuOpen && (
-        <div className={`lg:hidden fixed inset-x-0 top-20 bottom-0 overflow-y-auto px-6 py-8 space-y-4 animate-in slide-in-from-top duration-300 shadow-2xl z-40 ${isHeritage ? 'bg-[#141310] border-t border-[#c5a059]/30' : 'bg-[#0a0a0a] border-t border-white/10'}`}>
-          <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-4">
-            <button onClick={() => setLang('de')} className={`text-xs font-bold px-4 py-2 rounded-sm flex-1 ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>DEUTSCH</button>
-            <button onClick={() => setLang('en')} className={`text-xs font-bold px-4 py-2 rounded-sm flex-1 ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>ENGLISH</button>
+        <div className={`lg:hidden fixed inset-x-0 top-20 bottom-0 h-[calc(100dvh-5rem)] overflow-y-auto px-6 flex flex-col animate-in slide-in-from-top-2 duration-300 z-40 ${isHeritage ? 'bg-[#141310] border-t border-[#c5a059]/30' : 'bg-black border-t border-white/10'}`}>
+          
+          <div className="pt-8 pb-4 flex flex-col gap-6">
+            {['home', 'services', 'gallery', 'products', 'contact'].map(p => (
+              <button key={p} onClick={() => navigateTo(p)} className={`block w-full text-left text-xl font-bold tracking-widest uppercase transition-colors ${page === p ? (isHeritage ? 'text-[#c5a059]' : 'text-white') : 'text-gray-400 hover:text-white'}`}>
+                {t.nav[p] || p}
+              </button>
+            ))}
           </div>
           
-          {['home', 'services', 'gallery', 'products', 'contact'].map(p => (
-            <button key={p} onClick={() => navigateTo(p)} className="block w-full text-left text-base font-bold tracking-widest uppercase py-3 text-gray-300 hover:text-white">
-              {t.nav[p] || p}
-            </button>
-          ))}
-          
-          {currentUser ? (
-            <div className="pt-6 border-t border-gray-800 flex flex-col gap-4">
-              <div onClick={() => navigateTo('profile')} className="cursor-pointer border border-white/10 p-4 rounded-sm">
-                <p className="text-sm font-bold text-white">{t.profile.title}</p>
-                <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Loyalty Points</p>
+          <div className="mt-auto pb-10 pt-4">
+            {currentUser ? (
+              <div className="border-t border-gray-800 pt-6 flex flex-col gap-4">
+                <div onClick={() => navigateTo('profile')} className="cursor-pointer border border-white/10 p-4 rounded-sm">
+                  <p className="text-sm font-bold text-white uppercase tracking-widest">{t.profile.title}</p>
+                  <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Loyalty Points</p>
+                </div>
+                <div className="flex gap-4">
+                  {isAdminAuth && (
+                    <button onClick={() => { navigateTo('admin'); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold uppercase rounded-sm">Admin</button>
+                  )}
+                  <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-red-500/10 border border-red-500/30 text-red-400 font-bold uppercase rounded-sm">Logout</button>
+                </div>
               </div>
-              <div className="flex gap-4">
-                {isAdminAuth && (
-                  <button onClick={() => { navigateTo('admin'); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold uppercase rounded-sm">Admin</button>
-                )}
-                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-red-500/10 border border-red-500/30 text-red-400 font-bold uppercase rounded-sm">Logout</button>
+            ) : (
+              <div className="border-t border-gray-800 pt-6">
+                <button onClick={() => navigateTo('auth')} className={`block w-full py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-white text-black'}`}>Login / Register</button>
               </div>
-            </div>
-          ) : (
-            <button onClick={() => navigateTo('auth')} className={`block w-full mt-6 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
-          )}
+            )}
+          </div>
         </div>
       )}
     </nav>
