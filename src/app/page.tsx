@@ -424,35 +424,9 @@ function ProfileView() {
                       console.error("Confirmation email failed to send");
                     }
 
-                    // Alert Admin that client accepted the rescheduled time
-                    try {
-                      await fetch('/api/email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          email: 'rick.maity07@gmail.com',
-                          subject: "✅ Kunde hat Terminvorschlag akzeptiert",
-                          message: `Kunde ${currentUser.name} hat den neuen Terminvorschlag (${a.proposedDate} um ${a.proposedTime}) für ${a.service} akzeptiert.`
-                        })
-                      });
-                    } catch (err) {}
-
                     addNotification("Reschedule Accepted! Confirmation email sent.", "success");
                   }} className="bg-blue-500 text-black px-6 py-3 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-white transition-colors">Accept New Time</button>
-                  <button onClick={async () => {
-                    await updateAppointmentStatus(a.id, 'cancelled', false);
-                    try {
-                      await fetch('/api/email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          email: 'rick.maity07@gmail.com',
-                          subject: "❌ Kunde hat Terminvorschlag abgelehnt",
-                          message: `Kunde ${currentUser.name} hat den Terminvorschlag für ${a.service} abgelehnt und den Termin storniert.`
-                        })
-                      });
-                    } catch (err) {}
-                  }} className="border border-red-500/50 text-red-400 px-6 py-3 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-red-500/20 transition-colors">Decline & Cancel</button>
+                  <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 px-6 py-3 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-red-500/20 transition-colors">Decline & Cancel</button>
                 </div>
               </div>
             ))}
