@@ -149,7 +149,7 @@ function Navbar() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-100 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-[100] flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
         <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : n.type === 'error' ? 'bg-[#111] border-red-500 text-red-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
@@ -161,11 +161,21 @@ function ToastContainer() {
 
 // --- AUTHENTICATION PORTAL ---
 function AuthView() {
-  const { theme, t, loginOAuth, loginEmail, registerEmail } = useApp();
+  const { theme, t, loginOAuth, loginEmail, registerEmail, resetPassword, addNotification } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [name, setName] = useState('');
+  
+  // Registration Phone Fields
+  const [countryCode, setCountryCode] = useState('+49');
+  const [phoneInput, setPhoneInput] = useState('');
+
+  // Custom OTP Verification States (Email ONLY)
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
+  const [generatedEmailOTP, setGeneratedEmailOTP] = useState('');
+  const [inputEmailOTP, setInputEmailOTP] = useState('');
+  
   const isHeritage = theme === 'heritage';
 
   const handleEmailAuth = async (e: React.FormEvent) => {
@@ -173,12 +183,80 @@ function AuthView() {
     if (isLogin) {
       await loginEmail(email, pass);
     } else {
-      await registerEmail(email, pass, name);
+      if (!phoneInput || !name) {
+        addNotification("Please fill in all details.", "error");
+        return;
+      }
+      
+      // 1. Generate one random 6-digit code for Email
+      const eOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedEmailOTP(eOTP);
+      setIsVerifyingOTP(true); // Open the Modal
+      
+      // 2. Send the Email OTP using Nodemailer
+      try {
+        await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            subject: "Rebo Salon: Your Verification Code",
+            message: `Hello ${name},\n\nYour registration verification code is: ${eOTP}\n\nPlease enter this code on the website to complete your account setup.\n\nThank you,\nRebo Salon`
+          })
+        });
+        addNotification("Verification code sent to your Email!", "info");
+      } catch (err) {
+        console.error("Failed to send email OTP");
+        addNotification("Failed to send verification email.", "error");
+      }
+    }
+  };
+
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputEmailOTP === generatedEmailOTP) {
+      // MATCH! Now we finally create the account in Firebase.
+      const fullPhone = `${countryCode}${phoneInput}`.trim();
+      setIsVerifyingOTP(false);
+      await registerEmail(email, pass, name, fullPhone);
+    } else {
+      addNotification("Invalid code. Please check and try again.", "error");
     }
   };
 
   return (
-    <div className="flex min-h-screen pt-20">
+    <div className="flex min-h-screen pt-20 relative">
+      
+      {/* EMAIL OTP MODAL OVERLAY */}
+      {isVerifyingOTP && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
+            <h3 className={`text-2xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase'}`}>Verify Account</h3>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">We sent a 6-digit code to your email address. Please enter it below.</p>
+            
+            <form onSubmit={handleVerifySubmit} className="space-y-5">
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-2">Email Code</label>
+                <input 
+                  required 
+                  type="text" 
+                  maxLength={6}
+                  value={inputEmailOTP} 
+                  onChange={e => setInputEmailOTP(e.target.value)} 
+                  placeholder="------" 
+                  className={`w-full border rounded-sm p-4 outline-none text-2xl tracking-[0.5em] text-center font-mono transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                />
+              </div>
+              
+              <div className="flex gap-4 mt-8">
+                <button type="button" onClick={() => setIsVerifyingOTP(false)} className="flex-1 py-4 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">Cancel</button>
+                <button type="submit" className={`flex-1 py-4 uppercase text-xs font-bold text-black rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>Verify & Join</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="hidden lg:block lg:w-1/2 relative bg-black/50">
         <img src="https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=1600&q=80" alt="Login Background" className="w-full h-full object-cover grayscale-50 opacity-40" />
       </div>
@@ -191,7 +269,31 @@ function AuthView() {
           <form onSubmit={handleEmailAuth} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
             <div className="space-y-4 mb-6">
               {!isLogin && (
-                <input required type="text" value={name} onChange={e=>setName(e.target.value)} placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+                <>
+                  <input required type="text" value={name} onChange={e=>setName(e.target.value)} placeholder={t.booking.name} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+                  
+                  {/* Country Code & Phone Input for Registration */}
+                  <div className="flex gap-2">
+                    <select 
+                      value={countryCode} 
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[30%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
+                    >
+                      <option value="+49">🇩🇪 +49</option>
+                      <option value="+43">🇦🇹 +43</option>
+                      <option value="+41">🇨🇭 +41</option>
+                      <option value="+1">🇺🇸 +1</option>
+                    </select>
+                    <input 
+                      required 
+                      type="tel" 
+                      value={phoneInput} 
+                      onChange={(e)=>setPhoneInput(e.target.value)} 
+                      placeholder={t.booking.phone} 
+                      className={`w-[70%] border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                    />
+                  </div>
+                </>
               )}
               <input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
               <input required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
@@ -200,6 +302,17 @@ function AuthView() {
             <button type="submit" className={`w-full py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
               {isLogin ? t.auth.loginBtn : t.auth.registerTitle}
             </button>
+
+            {/* Forgot Password Button */}
+            {isLogin && (
+              <button 
+                type="button" 
+                onClick={() => resetPassword(email)}
+                className="text-xs text-gray-400 hover:text-white mt-4 block w-full text-center transition-colors underline"
+              >
+                {t.auth.resetPassBtn || "Forgot Password?"}
+              </button>
+            )}
 
             <div className="mt-8 relative">
                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
@@ -231,13 +344,29 @@ function AuthView() {
 // --- USER PROFILE & CRM VIEW ---
 function ProfileView() {
   const { t, theme, currentUser, appointments, addNotification } = useApp();
+  
+  const [countryCode, setCountryCode] = useState("+49");
   const [phoneInput, setPhoneInput] = useState("");
+  
   const isHeritage = theme === 'heritage';
   const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
   const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
 
   useEffect(() => {
-    if (currentUser?.phone) setPhoneInput(currentUser.phone);
+    if (currentUser?.phone) {
+      let pNum = currentUser.phone;
+      let cCode = "+49";
+      const knownCodes = ["+49", "+43", "+41", "+1"];
+      for (let code of knownCodes) {
+        if (pNum.startsWith(code)) {
+          cCode = code;
+          pNum = pNum.replace(code, "").trim();
+          break;
+        }
+      }
+      setCountryCode(cCode);
+      setPhoneInput(pNum);
+    }
   }, [currentUser]);
 
   if (!currentUser) return null;
@@ -245,7 +374,8 @@ function ProfileView() {
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateDoc(doc(db, 'users', currentUser.id), { phone: phoneInput });
+      const fullPhone = `${countryCode}${phoneInput}`.trim();
+      await updateDoc(doc(db, 'users', currentUser.id), { phone: fullPhone });
       addNotification("Phone number saved successfully!", "success");
     } catch (err: any) {
       addNotification("Failed to save phone number", "error");
@@ -266,16 +396,28 @@ function ProfileView() {
       <div className={`p-8 mb-6 border rounded-sm shadow-xl ${bgBorder}`}>
         <h3 className="text-xl font-bold mb-2">Contact Information</h3>
         <p className="text-sm text-gray-400 mb-4">Set your phone number so it automatically fills in when booking appointments and receiving SMS reminders.</p>
-        <form onSubmit={handleSavePhone} className="flex gap-4">
-          <input 
-            type="tel" 
-            value={phoneInput} 
-            onChange={(e) => setPhoneInput(e.target.value)} 
-            placeholder="+49..." 
-            className="flex-1 bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
-            required
-          />
-          <button type="submit" className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>
+        <form onSubmit={handleSavePhone} className="flex flex-col sm:flex-row gap-4">
+          <div className="flex gap-2 flex-1">
+            <select 
+              value={countryCode} 
+              onChange={(e) => setCountryCode(e.target.value)}
+              className="border border-white/20 bg-black p-3 rounded-sm outline-none text-sm w-[35%] text-white"
+            >
+              <option value="+49">🇩🇪 +49</option>
+              <option value="+43">🇦🇹 +43</option>
+              <option value="+41">🇨🇭 +41</option>
+              <option value="+1">🇺🇸 +1</option>
+            </select>
+            <input 
+              type="tel" 
+              value={phoneInput} 
+              onChange={(e) => setPhoneInput(e.target.value)} 
+              placeholder="158 8862 3971" 
+              className="w-[65%] bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
+              required
+            />
+          </div>
+          <button type="submit" className={`px-6 py-3 font-bold uppercase text-xs rounded-sm whitespace-nowrap ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>
             Save Phone
           </button>
         </form>
@@ -520,9 +662,10 @@ function BookingView() {
   const { t, theme, lang, currentUser, addAppointment, servicesDB, getAvailableSlots } = useApp();
   const [submitted, setSubmitted] = useState(false);
   
-  // Fully unlocked, editable fields synced with the user profile
   const [bookingName, setBookingName] = useState("");
-  const [bookingPhone, setBookingPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+49");
+  const [phoneInput, setPhoneInput] = useState("");
+  
   const [bookingDate, setBookingDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [useReward, setUseReward] = useState(false);
@@ -533,7 +676,20 @@ function BookingView() {
   useEffect(() => {
     if (currentUser) {
       setBookingName(currentUser.name || "");
-      setBookingPhone(currentUser.phone || "");
+      if (currentUser.phone) {
+        let pNum = currentUser.phone;
+        let cCode = "+49";
+        const knownCodes = ["+49", "+43", "+41", "+1"];
+        for (let code of knownCodes) {
+          if (pNum.startsWith(code)) {
+            cCode = code;
+            pNum = pNum.replace(code, "").trim();
+            break;
+          }
+        }
+        setCountryCode(cCode);
+        setPhoneInput(pNum);
+      }
     }
   }, [currentUser]);
 
@@ -550,15 +706,17 @@ function BookingView() {
       sendsms: { checked: boolean };
     };
 
+    const fullPhone = `${countryCode}${phoneInput}`.trim();
+
     // If the user typed a new phone number or name here, save it to their profile automatically!
-    if (bookingPhone !== currentUser.phone || bookingName !== currentUser.name) {
-      await updateDoc(doc(db, 'users', currentUser.id), { phone: bookingPhone, name: bookingName });
+    if (fullPhone !== currentUser.phone || bookingName !== currentUser.name) {
+      await updateDoc(doc(db, 'users', currentUser.id), { phone: fullPhone, name: bookingName });
     }
 
     await addAppointment({
       userId: currentUser.id,
       name: bookingName,
-      phone: bookingPhone,
+      phone: fullPhone,
       service: target.service.value,
       stylist: target.stylist.value,
       date: bookingDate,
@@ -624,13 +782,25 @@ function BookingView() {
                 </div>
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.phone}</label>
-                  <input 
-                    required 
-                    value={bookingPhone} 
-                    onChange={e => setBookingPhone(e.target.value)} 
-                    type="tel" 
-                    className={`w-full border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
-                  />
+                  <div className="flex gap-2">
+                    <select 
+                      value={countryCode} 
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[35%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
+                    >
+                      <option value="+49">🇩🇪 +49</option>
+                      <option value="+43">🇦🇹 +43</option>
+                      <option value="+41">🇨🇭 +41</option>
+                      <option value="+1">🇺🇸 +1</option>
+                    </select>
+                    <input 
+                      required 
+                      value={phoneInput} 
+                      onChange={e => setPhoneInput(e.target.value)} 
+                      type="tel" 
+                      className={`w-[65%] border rounded-sm p-4 outline-none text-base transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                    />
+                  </div>
                 </div>
               </div>
               
