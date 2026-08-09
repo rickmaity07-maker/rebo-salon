@@ -73,6 +73,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
+  const apiSecretHeader = {
+    'Content-Type': 'application/json',
+    'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET || ''
+  };
 
   const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     const id = Date.now();
@@ -93,6 +97,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (currentUser && page === 'auth') {
+      setPageRouter('profile');
+    }
+  }, [currentUser, page]);
 
   const setPageRouter = (newPage: Page) => {
     if (newPage !== page) {
@@ -151,7 +161,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubAppts(); if (unsubUser) unsubUser(); };
   }, []);
 
-  // FIXED #6: Block out dates that have a 'proposed' status so they aren't double-booked
   const getAvailableSlots = (date: string) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
     
@@ -235,7 +244,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch('/api/email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiSecretHeader,
         body: JSON.stringify({
           email: currentUser.email,
           subject: "Rebo Salon: Buchungsanfrage erhalten",
@@ -246,11 +255,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       console.error("User request confirmation email failed");
     }
 
-    // FIXED #10: Removed hardcoded email here
     try {
       await fetch('/api/email', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        headers: apiSecretHeader, 
         body: JSON.stringify({ 
           email: adminEmail, 
           subject: "🚨 Neuer Termin eingegangen!",
@@ -275,7 +283,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     await updateDoc(doc(db, 'appointments', id), updates);
 
-    // FIXED #2 & #5: Refund or revoke loyalty points if the appointment is cancelled/rejected
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
       const userDoc = await getDoc(userRef);
@@ -292,20 +299,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const userDoc = await getDoc(doc(db, 'users', appt.userId));
     const userEmail = userDoc.exists() ? userDoc.data().email : null;
 
-    // FIXED #1: Only send the confirmation email if the status transitioned to confirmed, not on note edits
     if (status === 'confirmed' && appt.status !== 'confirmed') {
         if (sendsms && appt.phone) {
           try {
             const cleanPhone = appt.phone.replace(/\s+/g, '');
             const smsText = `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!`;
-            await fetch('/api/sms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: cleanPhone, message: smsText }) });
+            await fetch('/api/sms', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ phone: cleanPhone, message: smsText }) });
           } catch (e) { console.error("SMS failed"); }
         }
         
         if (userEmail) {
           try {
             const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist offiziell bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
-            await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
+            await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
             addNotification("Status aktualisiert & Bestätigungs-E-Mail gesendet!", 'success');
           } catch (e) { addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error'); }
         }
@@ -314,7 +320,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (userEmail) {
           try {
             const emailText = `Hallo ${appt.name},\n\nLeider mussten wir deine Termin Anfrage für den ${appt.date} um ${appt.time} Uhr absagen oder stornieren.\n\nBitte versuche einen anderen Termin auf unserer Webseite zu buchen.\n\nDein Rebo Salon Team`;
-            await fetch('/api/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminabsage", message: emailText }) });
+            await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminabsage", message: emailText }) });
             addNotification("Termin abgelehnt & Absage-E-Mail gesendet!", 'info');
           } catch (e) { console.error("Cancellation email failed"); }
         }
@@ -326,7 +332,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             
             await fetch('/api/email', { 
               method: 'POST', 
-              headers: { 'Content-Type': 'application/json' }, 
+              headers: apiSecretHeader, 
               body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminvorschlag / Action Required", message: emailText }) 
             });
             addNotification("Neuer Termin vorgeschlagen & E-Mail an Kunden gesendet!", 'info');
@@ -334,7 +340,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         
     } else if (notes !== undefined) { 
-      // If none of the status transitions match but notes are defined, it's just a CRM edit
       addNotification("Notizen gespeichert.", 'success'); 
     }
   };
@@ -511,7 +516,7 @@ function Navbar() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
         <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : n.type === 'error' ? 'bg-[#111] border-red-500 text-red-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
@@ -573,7 +578,6 @@ function AuthView() {
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputEmailOTP === generatedEmailOTP) {
-      // FIXED #7: Strip spaces from phone number input
       const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
       setIsVerifyingOTP(false);
       await registerEmail(email, pass, name, fullPhone);
@@ -729,7 +733,6 @@ function ProfileView() {
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // FIXED #7: Strip spaces from phone number input
       const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
       await updateDoc(doc(db, 'users', currentUser.id), { phone: fullPhone });
       addNotification("Phone number saved successfully!", "success");
@@ -898,9 +901,9 @@ function ProfileView() {
   );
 }
 
-// --- ADMIN DASHBOARD (CRUD & TRANSLATIONS) ---
+// --- ADMIN DASHBOARD WITH AI AUTO-TRANSLATION ---
 function AdminView() {
-  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang, getAvailableSlots } = useApp();
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateTranslation, t, theme, lang, getAvailableSlots, addNotification } = useApp();
   const [tab, setTab] = useState<'appointments' | 'services' | 'products' | 'translations'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
   
@@ -911,6 +914,27 @@ function AdminView() {
   const [transKey, setTransKey] = useState('title');
   const [transVal, setTransVal] = useState('');
 
+  // State for Service AI Translation Form
+  const [serviceNameDe, setServiceNameDe] = useState('');
+  const [serviceNameEn, setServiceNameEn] = useState('');
+  const [servicePrice, setServicePrice] = useState('');
+  const [serviceOldPrice, setServiceOldPrice] = useState('');
+  const [isTranslatingService, setIsTranslatingService] = useState(false);
+
+  // State for Product AI Translation Form
+  const [productNameDe, setProductNameDe] = useState('');
+  const [productNameEn, setProductNameEn] = useState('');
+  const [productDescDe, setProductDescDe] = useState('');
+  const [productDescEn, setProductDescEn] = useState('');
+  const [productPrice, setProductPrice] = useState('');
+  const [productImage, setProductImage] = useState<File | null>(null);
+  const [isTranslatingProduct, setIsTranslatingProduct] = useState(false);
+
+  const apiSecretHeader = {
+    'Content-Type': 'application/json',
+    'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET || ''
+  };
+
   const isHeritage = theme === 'heritage';
   const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
   const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
@@ -919,6 +943,82 @@ function AdminView() {
     e.preventDefault();
     updateTranslation(lang, transSection, transKey, transVal);
     setTransVal('');
+  };
+
+  // AI Service Auto-Translate
+  const handleTranslateService = async () => {
+    if (!serviceNameDe) return;
+    setIsTranslatingService(true);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: apiSecretHeader,
+        body: JSON.stringify({ text: serviceNameDe, targetLang: 'en' })
+      });
+      const data = await res.json();
+      if (data.translatedText) setServiceNameEn(data.translatedText);
+      addNotification("AI translation generated! Review and edit if needed.", "info");
+    } catch (e) {
+      addNotification("Translation failed", "error");
+    } finally {
+      setIsTranslatingService(false);
+    }
+  };
+
+  // AI Product Auto-Translate
+  const handleTranslateProduct = async () => {
+    if (!productNameDe && !productDescDe) return;
+    setIsTranslatingProduct(true);
+    try {
+      if (productNameDe) {
+        const resName = await fetch('/api/translate', {
+          method: 'POST',
+          headers: apiSecretHeader,
+          body: JSON.stringify({ text: productNameDe, targetLang: 'en' })
+        });
+        const dataName = await resName.json();
+        if (dataName.translatedText) setProductNameEn(dataName.translatedText);
+      }
+      if (productDescDe) {
+        const resDesc = await fetch('/api/translate', {
+          method: 'POST',
+          headers: apiSecretHeader,
+          body: JSON.stringify({ text: productDescDe, targetLang: 'en' })
+        });
+        const dataDesc = await resDesc.json();
+        if (dataDesc.translatedText) setProductDescEn(dataDesc.translatedText);
+      }
+      addNotification("AI translation generated for Product!", "info");
+    } catch (e) {
+      addNotification("Translation failed", "error");
+    } finally {
+      setIsTranslatingProduct(false);
+    }
+  };
+
+  const handleAddServiceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalName = serviceNameEn ? `${serviceNameDe} / ${serviceNameEn}` : serviceNameDe;
+    await addService({ name: finalName, price: servicePrice, oldPrice: serviceOldPrice });
+    setServiceNameDe('');
+    setServiceNameEn('');
+    setServicePrice('');
+    setServiceOldPrice('');
+  };
+
+  const handleAddProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalName = productNameEn ? `${productNameDe} / ${productNameEn}` : productNameDe;
+    const finalDesc = productDescEn ? `${productDescDe} / ${productDescEn}` : productDescDe;
+    const imageUri = productImage ? URL.createObjectURL(productImage) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80';
+    
+    await addProduct({ name: finalName, price: productPrice, desc: finalDesc, image: imageUri });
+    setProductNameDe('');
+    setProductNameEn('');
+    setProductDescDe('');
+    setProductDescEn('');
+    setProductPrice('');
+    setProductImage(null);
   };
 
   return (
@@ -1067,17 +1167,40 @@ function AdminView() {
       {tab === 'services' && (
         <div className="grid lg:grid-cols-2 gap-8">
           <div className={`p-6 border rounded-sm ${bgBorder}`}>
-            <h3 className="text-lg md:text-xl font-bold mb-4">Add Service</h3>
-            <form onSubmit={(e:any) => { e.preventDefault(); addService({ name: e.target.name.value, price: e.target.price.value, oldPrice: e.target.oldPrice.value }); e.target.reset(); }} className="space-y-4">
-              <input required name="name" type="text" placeholder="Service Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input required name="price" type="text" placeholder="Price (30 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-                <input name="oldPrice" type="text" placeholder="Old Price" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+            <h3 className="text-lg md:text-xl font-bold mb-4">Add Service (With AI Translation)</h3>
+            <form onSubmit={handleAddServiceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Service Name (German)</label>
+                <input required value={serviceNameDe} onChange={e => setServiceNameDe(e.target.value)} type="text" placeholder="e.g. Herrenschnitt & Bart" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
               </div>
-              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Add Service</button>
+
+              <button type="button" onClick={handleTranslateService} disabled={isTranslatingService || !serviceNameDe} className="w-full py-2 bg-blue-500/20 text-blue-400 border border-blue-500/40 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-500 hover:text-white transition-colors disabled:opacity-50">
+                {isTranslatingService ? "Translating..." : "✨ Auto-Translate to English with AI"}
+              </button>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Service Name (English Preview / Editable)</label>
+                <input value={serviceNameEn} onChange={e => setServiceNameEn(e.target.value)} type="text" placeholder="e.g. Men's Cut & Beard" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1">Price (€)</label>
+                  <input required value={servicePrice} onChange={e => setServicePrice(e.target.value)} type="text" placeholder="35 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1">Old Price (€)</label>
+                  <input value={serviceOldPrice} onChange={e => setServiceOldPrice(e.target.value)} type="text" placeholder="40 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+                </div>
+              </div>
+
+              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black rounded-sm ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>
+                Save Service to Database
+              </button>
             </form>
           </div>
           <div className="space-y-3">
+            <h3 className="text-lg font-bold mb-4">Existing Services</h3>
             {servicesDB.map((s: ServiceItem) => (
               <div key={s.id} className={`p-5 flex justify-between items-center border rounded-sm text-base ${bgBorder}`}>
                 <span>{s.name} <span className={primaryColor}>({s.price})</span></span>
@@ -1091,19 +1214,49 @@ function AdminView() {
       {tab === 'products' && (
         <div className="grid lg:grid-cols-2 gap-8">
           <div className={`p-6 border rounded-sm ${bgBorder}`}>
-            <h3 className="text-lg md:text-xl font-bold mb-4">Add Product</h3>
-            <form onSubmit={(e:any) => { e.preventDefault(); const file = e.target.image?.files[0]; addProduct({ name: e.target.name.value, price: e.target.price.value, desc: e.target.desc.value, image: file ? URL.createObjectURL(file) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80' }); e.target.reset(); }} className="space-y-4">
-              <input required name="name" type="text" placeholder="Product Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-              <input required name="desc" type="text" placeholder="Description" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-              <input required name="price" type="text" placeholder="Price (24,90 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
+            <h3 className="text-lg md:text-xl font-bold mb-4">Add Product (With AI Translation)</h3>
+            <form onSubmit={handleAddProductSubmit} className="space-y-4">
               <div>
-                 <label className="block text-xs text-gray-400 mb-2 uppercase">Upload Image</label>
-                 <input name="image" type="file" accept="image/*" className="w-full text-base text-gray-400 file:mr-4 file:py-3 file:px-4 file:rounded-sm file:border-0 file:bg-white/10 file:text-white" />
+                <label className="block text-xs uppercase text-gray-400 mb-1">Product Name (German)</label>
+                <input required value={productNameDe} onChange={e => setProductNameDe(e.target.value)} type="text" placeholder="e.g. Haarwachs" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
               </div>
-              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>Upload Product</button>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Description (German)</label>
+                <textarea required value={productDescDe} onChange={e => setProductDescDe(e.target.value)} rows={2} placeholder="e.g. Starker Halt für den ganzen Tag" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              </div>
+
+              <button type="button" onClick={handleTranslateProduct} disabled={isTranslatingProduct || (!productNameDe && !productDescDe)} className="w-full py-2 bg-blue-500/20 text-blue-400 border border-blue-500/40 text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-500 hover:text-white transition-colors disabled:opacity-50">
+                {isTranslatingProduct ? "Translating..." : "✨ Auto-Translate Product with AI"}
+              </button>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Product Name (English Preview / Editable)</label>
+                <input value={productNameEn} onChange={e => setProductNameEn(e.target.value)} type="text" placeholder="e.g. Hair Wax" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Description (English Preview / Editable)</label>
+                <textarea value={productDescEn} onChange={e => setProductDescEn(e.target.value)} rows={2} placeholder="e.g. Strong hold for all day" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-1">Price (€)</label>
+                <input required value={productPrice} onChange={e => setProductPrice(e.target.value)} type="text" placeholder="19,90 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              </div>
+
+              <div>
+                 <label className="block text-xs text-gray-400 mb-1 uppercase">Product Image</label>
+                 <input type="file" accept="image/*" onChange={e => setProductImage(e.target.files?.[0] || null)} className="w-full text-xs text-gray-400 file:mr-4 file:py-2 file:px-3 file:rounded-sm file:border-0 file:bg-white/10 file:text-white" />
+              </div>
+
+              <button type="submit" className={`w-full py-4 font-bold uppercase text-sm text-black rounded-sm ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`}>
+                Upload Product to Store
+              </button>
             </form>
           </div>
           <div className="space-y-3">
+            <h3 className="text-lg font-bold mb-4">Existing Products</h3>
             {productsDB.map((p: ProductItem) => (
               <div key={p.id} className={`p-4 flex justify-between items-center border rounded-sm ${bgBorder}`}>
                 <div className="flex items-center gap-4">
@@ -1169,7 +1322,6 @@ function BookingView() {
       sendsms: { checked: boolean };
     };
 
-    // FIXED #7: Strip spaces from phone number input
     const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
 
     if (fullPhone !== currentUser.phone || bookingName !== currentUser.name) {
@@ -1412,7 +1564,7 @@ function ContactView() {
         </div>
       </div>
 
-      <div className="w-full lg:w-1/2 h-[50vh] min-h-[400px] lg:min-h-[auto] lg:h-auto relative bg-gray-900 mt-8 lg:mt-0">
+      <div className="w-full lg:w-1/2 h-[50vh] min-h-96 lg:min-h-0 lg:h-auto relative bg-gray-900 mt-8 lg:mt-0">
         <iframe 
           src="https://maps.google.com/maps?q=Rebo%20Salon,%20Manggasse%206,%2097421%20Schweinfurt&t=&z=16&ie=UTF8&iwloc=&output=embed" 
           className="absolute inset-0 w-full h-full"
