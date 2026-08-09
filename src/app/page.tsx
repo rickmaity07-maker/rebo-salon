@@ -277,7 +277,7 @@ function AuthView() {
                     <select 
                       value={countryCode} 
                       onChange={(e) => setCountryCode(e.target.value)}
-                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[35%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
+                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[30%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
                     >
                       <option value="+49">🇩🇪 +49</option>
                       <option value="+43">🇦🇹 +43</option>
@@ -290,7 +290,7 @@ function AuthView() {
                       value={phoneInput} 
                       onChange={(e)=>setPhoneInput(e.target.value)} 
                       placeholder={t.booking.phone} 
-                      className={`w-[65%] border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                      className={`w-[70%] border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
                     />
                   </div>
                 </>
@@ -950,7 +950,7 @@ function ContactView() {
 
       <div className="w-full lg:w-1/2 h-[50vh] min-h-[400px] lg:min-h-[auto] lg:h-auto relative bg-gray-900 mt-8 lg:mt-0">
         <iframe 
-          src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2558.1251347690196!2d10.231269376122606!3d50.04655511767119!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47a2f700cc6d1715%3A0x1dcf00ec826d8a30!2sREBO%20SALON!5e0!3m2!1sen!2sde!4v1707000000000!5m2!1sen!2sde" 
+          src="https://maps.google.com/maps?q=Rebo%20Salon,%20Manggasse%206,%2097421%20Schweinfurt&t=&z=16&ie=UTF8&iwloc=&output=embed" 
           className="absolute inset-0 w-full h-full"
           style={{ border: 0 }} 
           allowFullScreen 
