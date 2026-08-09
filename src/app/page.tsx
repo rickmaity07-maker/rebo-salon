@@ -1347,7 +1347,7 @@ function BookingView() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen pt-20">
-      <div className="w-full lg:w-1/2 relative h-[30vh] lg:h-auto min-h-[250px]">
+      <div className="w-full lg:w-1/2 relative h-[30vh] lg:h-auto min-h-62.5">
         <div className="absolute inset-0 bg-black/40 z-10" />
         <img src="https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=1600&q=80" alt="Salon" className="w-full h-full object-cover grayscale-30" />
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6 md:p-12">
