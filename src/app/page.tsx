@@ -22,7 +22,7 @@ function Navbar() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 md:h-24 flex items-center justify-between">
         
         {/* LOGO */}
-        <div className="flex flex-col cursor-pointer" onClick={() => navigateTo('home')}>
+        <div className="flex flex-col cursor-pointer z-50 relative" onClick={() => navigateTo('home')}>
            <span className={`text-xl md:text-2xl font-bold tracking-widest ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'text-white'}`}>
              REBO SALON
            </span>
@@ -81,13 +81,13 @@ function Navbar() {
         </div>
 
         {/* MOBILE CONTROLS */}
-        <div className="flex lg:hidden items-center gap-4">
+        <div className="flex lg:hidden items-center gap-4 z-50 relative">
           {!currentUser ? (
              <button onClick={() => setPage('auth')} className="p-2 text-gray-400 hover:text-white">
                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
              </button>
           ) : (
-             <button onClick={() => setPage('profile')} className={`w-8 h-8 rounded-full flex items-center justify-center border ${isHeritage ? 'border-[#c5a059] text-[#c5a059]' : 'border-[#d4af37] text-[#d4af37]'}`}>
+             <button onClick={() => { setMobileMenuOpen(false); setPage('profile'); }} className={`w-8 h-8 rounded-full flex items-center justify-center border ${isHeritage ? 'border-[#c5a059] text-[#c5a059]' : 'border-[#d4af37] text-[#d4af37]'}`}>
                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
              </button>
           )}
@@ -109,12 +109,12 @@ function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown */}
+      {/* MOBILE MENU DROPDOWN (Fullscreen Overlay for Mobile Optimization) */}
       {mobileMenuOpen && (
-        <div className={`lg:hidden border-b px-6 py-8 space-y-4 animate-in slide-in-from-top duration-300 shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#0a0a0a] border-white/10'}`}>
+        <div className={`lg:hidden fixed inset-x-0 top-20 bottom-0 overflow-y-auto px-6 py-8 space-y-4 animate-in slide-in-from-top duration-300 shadow-2xl z-40 ${isHeritage ? 'bg-[#141310] border-t border-[#c5a059]/30' : 'bg-[#0a0a0a] border-t border-white/10'}`}>
           <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-4">
-            <button onClick={() => setLang('de')} className={`text-xs font-bold px-4 py-2 rounded-sm ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>DE</button>
-            <button onClick={() => setLang('en')} className={`text-xs font-bold px-4 py-2 rounded-sm ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>EN</button>
+            <button onClick={() => setLang('de')} className={`text-xs font-bold px-4 py-2 rounded-sm flex-1 ${lang === 'de' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>DEUTSCH</button>
+            <button onClick={() => setLang('en')} className={`text-xs font-bold px-4 py-2 rounded-sm flex-1 ${lang === 'en' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'bg-white/10 text-gray-300'}`}>ENGLISH</button>
           </div>
           
           {['home', 'services', 'gallery', 'products', 'contact'].map(p => (
@@ -124,20 +124,20 @@ function Navbar() {
           ))}
           
           {currentUser ? (
-            <div className="pt-4 border-t border-gray-800 flex justify-between items-center">
-              <div onClick={() => navigateTo('profile')} className="cursor-pointer">
-                <p className="text-sm font-bold text-white underline">{t.profile.title}</p>
-                <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Points</p>
+            <div className="pt-6 border-t border-gray-800 flex flex-col gap-4">
+              <div onClick={() => navigateTo('profile')} className="cursor-pointer border border-white/10 p-4 rounded-sm">
+                <p className="text-sm font-bold text-white">{t.profile.title}</p>
+                <p className={`text-xs mt-1 ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>{currentUser.haircutCount}/10 Loyalty Points</p>
               </div>
               <div className="flex gap-4">
                 {isAdminAuth && (
-                  <button onClick={() => { navigateTo('admin'); setMobileMenuOpen(false); }} className="text-xs text-blue-400 font-bold uppercase">Admin</button>
+                  <button onClick={() => { navigateTo('admin'); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold uppercase rounded-sm">Admin</button>
                 )}
-                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-xs text-red-400 font-bold uppercase">Logout</button>
+                <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="flex-1 py-3 text-xs bg-red-500/10 border border-red-500/30 text-red-400 font-bold uppercase rounded-sm">Logout</button>
               </div>
             </div>
           ) : (
-            <button onClick={() => navigateTo('auth')} className={`block w-full mt-4 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
+            <button onClick={() => navigateTo('auth')} className={`block w-full mt-6 py-4 text-center font-bold uppercase tracking-widest text-sm rounded-sm ${isHeritage ? 'bg-[#c5a059] text-[#1a1814]' : 'bg-[#d4af37] text-black'}`}>Login / Register</button>
           )}
         </div>
       )}
@@ -266,7 +266,7 @@ function AuthView() {
              <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{isLogin ? t.auth.loginTitle : t.auth.registerTitle}</h2>
              <p className="text-gray-400 text-sm">{t.auth.loginSub}</p>
           </div>
-          <form onSubmit={handleEmailAuth} className={`p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
+          <form onSubmit={handleEmailAuth} className={`p-6 md:p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
             <div className="space-y-4 mb-6">
               {!isLogin && (
                 <>
@@ -277,7 +277,7 @@ function AuthView() {
                     <select 
                       value={countryCode} 
                       onChange={(e) => setCountryCode(e.target.value)}
-                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[30%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
+                      className={`border rounded-sm p-4 outline-none text-sm transition-colors w-[35%] ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`}
                     >
                       <option value="+49">🇩🇪 +49</option>
                       <option value="+43">🇦🇹 +43</option>
@@ -290,7 +290,7 @@ function AuthView() {
                       value={phoneInput} 
                       onChange={(e)=>setPhoneInput(e.target.value)} 
                       placeholder={t.booking.phone} 
-                      className={`w-[70%] border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
+                      className={`w-[65%] border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} 
                     />
                   </div>
                 </>
@@ -319,7 +319,7 @@ function AuthView() {
                <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>{t.auth.social}</span></div>
             </div>
 
-            <div className="flex gap-4 mt-6">
+            <div className="flex flex-col sm:flex-row gap-4 mt-6">
               <button type="button" onClick={() => loginOAuth('Google')} className="flex-1 py-3 border border-gray-700 rounded-sm text-sm font-medium hover:bg-white/5 transition-colors flex justify-center items-center gap-2">
                 <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="currentColor" d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg> Google
               </button>
@@ -387,17 +387,17 @@ function ProfileView() {
   const past = userAppointments.filter(a => a.status === 'confirmed');
 
   return (
-    <div className="min-h-screen pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
-      <div className="mb-12 text-center md:text-left">
-         <h2 className={`text-4xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
+    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
+      <div className="mb-10 md:mb-12 text-center md:text-left">
+         <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
          <p className="text-gray-400 text-sm md:text-base">Welcome back, {currentUser.name}</p>
       </div>
 
-      <div className={`p-8 mb-6 border rounded-sm shadow-xl ${bgBorder}`}>
-        <h3 className="text-xl font-bold mb-2">Contact Information</h3>
-        <p className="text-sm text-gray-400 mb-4">Set your phone number so it automatically fills in when booking appointments and receiving SMS reminders.</p>
+      <div className={`p-6 md:p-8 mb-6 border rounded-sm shadow-xl ${bgBorder}`}>
+        <h3 className="text-lg md:text-xl font-bold mb-2">Contact Information</h3>
+        <p className="text-xs md:text-sm text-gray-400 mb-4">Set your phone number so it automatically fills in when booking appointments and receiving SMS reminders.</p>
         <form onSubmit={handleSavePhone} className="flex flex-col sm:flex-row gap-4">
-          <div className="flex gap-2 flex-1">
+          <div className="flex gap-2 w-full sm:flex-1">
             <select 
               value={countryCode} 
               onChange={(e) => setCountryCode(e.target.value)}
@@ -417,15 +417,15 @@ function ProfileView() {
               required
             />
           </div>
-          <button type="submit" className={`px-6 py-3 font-bold uppercase text-xs rounded-sm whitespace-nowrap ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>
+          <button type="submit" className={`w-full sm:w-auto px-6 py-4 sm:py-3 font-bold uppercase text-xs rounded-sm whitespace-nowrap ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>
             Save Phone
           </button>
         </form>
       </div>
 
-      <div className={`p-8 mb-10 border rounded-sm shadow-xl ${bgBorder}`}>
-        <h3 className="text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
-        <p className="text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
+      <div className={`p-6 md:p-8 mb-10 border rounded-sm shadow-xl ${bgBorder}`}>
+        <h3 className="text-lg md:text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
+        <p className="text-xs md:text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
         
         <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
           <div 
@@ -438,15 +438,15 @@ function ProfileView() {
 
       <div className="grid md:grid-cols-2 gap-8">
         <div>
-          <h3 className="text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
+          <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
           <div className="space-y-4">
             {upcoming.map(a => (
-              <div key={a.id} className={`p-6 border rounded-sm flex justify-between items-center ${bgBorder}`}>
+              <div key={a.id} className={`p-5 md:p-6 border rounded-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-0 ${bgBorder}`}>
                 <div>
-                  <p className="font-bold text-lg">{a.service}</p>
-                  <p className="text-sm text-gray-400">{a.date} at {a.time} with {a.stylist}</p>
+                  <p className="font-bold text-base md:text-lg">{a.service}</p>
+                  <p className="text-xs md:text-sm text-gray-400">{a.date} at {a.time} with {a.stylist}</p>
                 </div>
-                <span className="text-xs uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">Pending</span>
+                <span className="text-[10px] sm:text-xs uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm text-center">Pending</span>
               </div>
             ))}
             {upcoming.length === 0 && <p className="text-gray-500 text-sm">{t.profile.noHistory}</p>}
@@ -454,21 +454,21 @@ function ProfileView() {
         </div>
 
         <div>
-          <h3 className="text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
+          <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
           <div className="space-y-4">
             {past.map(a => (
-              <div key={a.id} className={`p-6 border rounded-sm ${bgBorder}`}>
-                <div className="flex justify-between items-start mb-4">
+              <div key={a.id} className={`p-5 md:p-6 border rounded-sm ${bgBorder}`}>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-0 mb-4">
                   <div>
-                    <p className="font-bold text-lg">{a.service}</p>
-                    <p className="text-sm text-gray-400">{a.date} with {a.stylist}</p>
+                    <p className="font-bold text-base md:text-lg">{a.service}</p>
+                    <p className="text-xs md:text-sm text-gray-400">{a.date} with {a.stylist}</p>
                   </div>
-                  <span className="text-xs uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Completed</span>
+                  <span className="text-[10px] sm:text-xs uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm text-center">Completed</span>
                 </div>
                 
                 <div className="mt-4 p-4 bg-black/40 border border-white/5 rounded-sm">
-                  <h4 className={`text-xs uppercase font-bold tracking-widest mb-2 ${primaryColor}`}>{t.profile.notesLabel}</h4>
-                  <p className="text-sm text-gray-300 leading-relaxed italic">
+                  <h4 className={`text-[10px] md:text-xs uppercase font-bold tracking-widest mb-2 ${primaryColor}`}>{t.profile.notesLabel}</h4>
+                  <p className="text-xs md:text-sm text-gray-300 leading-relaxed italic">
                     "{a.notes ? a.notes : 'Keine spezifischen Details hinterlegt.'}"
                   </p>
                 </div>
@@ -521,7 +521,7 @@ function AdminView() {
           <h3 className="text-xl font-bold mb-2">Dynamic Translation Editor</h3>
           <p className="text-sm text-gray-400 mb-6">Edit texts for the currently active language ({lang.toUpperCase()}). Changes save to Database.</p>
           <form onSubmit={handleSaveTrans} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs uppercase text-gray-400 mb-2">Section</label>
                 <select value={transSection} onChange={(e)=>setTransSection(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm">
@@ -586,9 +586,9 @@ function AdminView() {
                         value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')}
                         onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})}
                         placeholder="e.g., Skin fade sides, 3mm top..." 
-                        className="flex-1 bg-[#1a1a1a] border border-white/20 p-3 rounded-sm outline-none text-sm text-white" 
+                        className="flex-1 bg-[#1a1a1a] border border-white/20 p-3 rounded-sm outline-none text-sm text-white w-full" 
                       />
-                      <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] text-black hover:bg-white' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
+                      <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`w-full sm:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] text-black hover:bg-white' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
                         {t.profile.saveNote}
                       </button>
                     </div>
@@ -607,7 +607,7 @@ function AdminView() {
             <h3 className="text-lg md:text-xl font-bold mb-4">Add Service</h3>
             <form onSubmit={(e:any) => { e.preventDefault(); addService({ name: e.target.name.value, price: e.target.price.value, oldPrice: e.target.oldPrice.value }); e.target.reset(); }} className="space-y-4">
               <input required name="name" type="text" placeholder="Service Name" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input required name="price" type="text" placeholder="Price (30 €)" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
                 <input name="oldPrice" type="text" placeholder="Old Price" className="w-full bg-black border border-white/20 p-4 rounded-sm outline-none text-base" />
               </div>
@@ -645,7 +645,7 @@ function AdminView() {
               <div key={p.id} className={`p-4 flex justify-between items-center border rounded-sm ${bgBorder}`}>
                 <div className="flex items-center gap-4">
                   <img src={p.image} className="w-12 h-12 object-cover rounded-sm" />
-                  <span className="text-base font-medium">{p.name}</span>
+                  <span className="text-sm md:text-base font-medium">{p.name}</span>
                 </div>
                 <button onClick={() => deleteProduct(p.id)} className="text-red-400 text-xs uppercase font-bold hover:text-red-300 p-2">Delete</button>
               </div>
@@ -708,7 +708,6 @@ function BookingView() {
 
     const fullPhone = `${countryCode}${phoneInput}`.trim();
 
-    // If the user typed a new phone number or name here, save it to their profile automatically!
     if (fullPhone !== currentUser.phone || bookingName !== currentUser.name) {
       await updateDoc(doc(db, 'users', currentUser.id), { phone: fullPhone, name: bookingName });
     }
@@ -732,7 +731,7 @@ function BookingView() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen pt-20">
-      <div className="w-full lg:w-1/2 relative h-48 lg:h-auto">
+      <div className="w-full lg:w-1/2 relative h-[30vh] lg:h-auto min-h-[250px]">
         <div className="absolute inset-0 bg-black/40 z-10" />
         <img src="https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=1600&q=80" alt="Salon" className="w-full h-full object-cover grayscale-30" />
         <div className="absolute inset-0 z-20 flex items-center justify-center p-6 md:p-12">
@@ -902,7 +901,7 @@ function ContactView() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen pt-20">
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 lg:py-24 overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 pb-10 lg:py-24 overflow-y-auto">
         <div className="w-full max-w-md animate-in fade-in duration-700">
           <div className="mb-10 md:mb-12">
              <h2 className={`text-4xl md:text-5xl font-bold mb-3 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.contact.title}</h2>
@@ -949,11 +948,10 @@ function ContactView() {
         </div>
       </div>
 
-      <div className="w-full lg:w-1/2 h-80 lg:h-auto relative bg-gray-900">
+      <div className="w-full lg:w-1/2 h-[50vh] min-h-[400px] lg:min-h-[auto] lg:h-auto relative bg-gray-900 mt-8 lg:mt-0">
         <iframe 
           src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2558.1251347690196!2d10.231269376122606!3d50.04655511767119!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47a2f700cc6d1715%3A0x1dcf00ec826d8a30!2sREBO%20SALON!5e0!3m2!1sen!2sde!4v1707000000000!5m2!1sen!2sde" 
-          width="100%" 
-          height="100%" 
+          className="absolute inset-0 w-full h-full"
           style={{ border: 0 }} 
           allowFullScreen 
           loading="lazy" 
