@@ -149,7 +149,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubAppts(); if (unsubUser) unsubUser(); };
   }, []);
 
-  // --- KI DYNAMISCHE ÜBERSETZUNG (UI) ---
   const changeLanguage = async (newLang: string) => {
     if (newLang === lang) return;
     if (newLang === 'de' || translations[newLang]) {
@@ -237,8 +236,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     else await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
     
     try {
-      await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: currentUser.email, subject: "Rebo Salon: Buchungsanfrage", message: `Hallo ${appt.name},\n\nDeine Anfrage für ${appt.services.join(', ')} am ${appt.date} um ${appt.time} Uhr wurde übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit.\n\nRebo Salon Team`}) });
-      await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: adminEmail, subject: "🚨 Neuer Termin", message: `Neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${appt.services.join(', ')} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}`}) });
+      const servicesList = Array.isArray(appt.services) ? appt.services.join(', ') : (appt as any).service || 'Standard';
+      await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: currentUser.email, subject: "Rebo Salon: Buchungsanfrage", message: `Hallo ${appt.name},\n\nDeine Anfrage für ${servicesList} am ${appt.date} um ${appt.time} Uhr wurde übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit.\n\nRebo Salon Team`}) });
+      await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: adminEmail, subject: "🚨 Neuer Termin", message: `Neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${servicesList} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}`}) });
     } catch (e) {}
     addNotification("Buchungsanfrage gesendet!", 'success');
   };
@@ -516,7 +516,7 @@ function ToastContainer() {
 
 // --- AUTHENTICATION PORTAL ---
 function AuthView() {
-  const { theme, t, loginOAuth, loginEmail, registerEmail, resetPassword, addNotification } = useApp();
+  const { theme, t, loginOAuth, loginEmail, registerEmail, resetPassword } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
@@ -722,13 +722,16 @@ function ProfileView() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
               <div className="space-y-4">
-                {upcoming.map(a => (
-                  <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
-                    <p className="font-bold text-base">{a.services.join(', ')}</p>
-                    <p className="text-xs text-gray-400 mb-3">{a.date} um {a.time} bei {a.stylist} ({a.totalDurationMins} Min)</p>
-                    <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{a.status === 'pending' ? 'Ausstehend' : 'Vorgeschlagen'}</span>
-                  </div>
-                ))}
+                {upcoming.map(a => {
+                  const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
+                  return (
+                    <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
+                      <p className="font-bold text-base">{sList}</p>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} um {a.time} bei {a.stylist} ({a.totalDurationMins || 60} Min)</p>
+                      <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{a.status === 'pending' ? 'Ausstehend' : 'Vorgeschlagen'}</span>
+                    </div>
+                  );
+                })}
                 {upcoming.length === 0 && <p className="text-gray-500 text-sm">{t.profile.noHistory}</p>}
               </div>
             </div>
@@ -736,13 +739,16 @@ function ProfileView() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
               <div className="space-y-4">
-                {past.map(a => (
-                  <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
-                    <p className="font-bold text-base">{a.services.join(', ')}</p>
-                    <p className="text-xs text-gray-400 mb-3">{a.date} bei {a.stylist}</p>
-                    <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Abgeschlossen</span>
-                  </div>
-                ))}
+                {past.map(a => {
+                  const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
+                  return (
+                    <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
+                      <p className="font-bold text-base">{sList}</p>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} bei {a.stylist}</p>
+                      <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Abgeschlossen</span>
+                    </div>
+                  );
+                })}
                 {past.length === 0 && <p className="text-gray-500 text-sm">{t.profile.noHistory}</p>}
               </div>
             </div>
@@ -755,13 +761,11 @@ function ProfileView() {
 
 // --- ADMIN DASHBOARD (CRUD & CALENDAR) ---
 function AdminView() {
-  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, theme, getAvailableSlots, addNotification } = useApp();
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, theme } = useApp();
   const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
   
   const [calDate, setCalDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isRescheduling, setIsRescheduling] = useState<{[key:string]: boolean}>({});
-  const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
 
   // AI Translation State
   const [serviceNameDe, setServiceNameDe] = useState('');
@@ -872,13 +876,16 @@ function AdminView() {
                      </div>
                      <div className="flex-1 space-y-2">
                         {apptsInSlot.length === 0 ? <p className="text-gray-600 text-sm italic pt-1">Freier Slot</p> : null}
-                        {apptsInSlot.map(a => (
-                           <div key={a.id} className={`p-4 border rounded-sm ${a.status === 'confirmed' ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
-                              <p className="font-bold">{a.name} <span className="text-xs font-normal text-gray-400 ml-2">({a.phone})</span></p>
-                              <p className="text-sm text-gray-300 mt-1">{a.services.join(', ')} — {a.totalDurationMins} Min</p>
-                              <span className="text-[10px] uppercase font-bold text-gray-500 mt-2 block">Stylist: {a.stylist} • Status: {a.status}</span>
-                           </div>
-                        ))}
+                        {apptsInSlot.map(a => {
+                           const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
+                           return (
+                              <div key={a.id} className={`p-4 border rounded-sm ${a.status === 'confirmed' ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
+                                 <p className="font-bold">{a.name} <span className="text-xs font-normal text-gray-400 ml-2">({a.phone})</span></p>
+                                 <p className="text-sm text-gray-300 mt-1">{sList} — {a.totalDurationMins || 60} Min</p>
+                                 <span className="text-[10px] uppercase font-bold text-gray-500 mt-2 block">Stylist: {a.stylist} • Status: {a.status}</span>
+                              </div>
+                           );
+                        })}
                      </div>
                   </div>
                 )
@@ -896,27 +903,30 @@ function AdminView() {
               Ausstehende Anfragen ({pendingAppts.length})
             </h3>
             <div className="space-y-4">
-              {pendingAppts.map(a => (
-                <div key={a.id} className="bg-black/80 p-5 border border-red-500/20 rounded-sm">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
-                      <p className="text-sm text-gray-300 my-1"><span className="text-red-400 font-bold">{a.date} @ {a.time}</span> ({a.totalDurationMins} Min)</p>
-                      <p className="text-sm text-gray-400">Leistungen: {a.services.join(', ')}</p>
-                      {a.referenceImage && (
-                        <div className="mt-3">
-                           <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Referenzbild:</p>
-                           <img src={a.referenceImage} alt="Ref" className="h-24 rounded-sm border border-white/10" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', a.sendsms)} className="bg-green-600 text-white px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-green-500">Bestätigen</button>
-                      <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-600 text-red-400 px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-red-900/30">Ablehnen</button>
+              {pendingAppts.map(a => {
+                const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
+                return (
+                  <div key={a.id} className="bg-black/80 p-5 border border-red-500/20 rounded-sm">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
+                        <p className="text-sm text-gray-300 my-1"><span className="text-red-400 font-bold">{a.date} @ {a.time}</span> ({a.totalDurationMins || 60} Min)</p>
+                        <p className="text-sm text-gray-400">Leistungen: {sList}</p>
+                        {a.referenceImage && (
+                          <div className="mt-3">
+                             <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Referenzbild:</p>
+                             <img src={a.referenceImage} alt="Ref" className="h-24 rounded-sm border border-white/10" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', a.sendsms)} className="bg-green-600 text-white px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-green-500">Bestätigen</button>
+                        <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-600 text-red-400 px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-red-900/30">Ablehnen</button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {pendingAppts.length === 0 && <p className="text-gray-500 text-sm py-2">Keine neuen Anfragen.</p>}
             </div>
           </div>
@@ -925,25 +935,28 @@ function AdminView() {
           <div className={`p-4 md:p-6 border rounded-sm ${bgBorder}`}>
             <h3 className="text-lg md:text-xl font-bold mb-6">Bestätigt & Historie</h3>
             <div className="space-y-4">
-              {otherAppts.map(a => (
-                <div key={a.id} className="bg-black/50 p-5 border border-white/10 rounded-sm">
-                   <div className="flex flex-col md:flex-row justify-between gap-4">
-                     <div>
-                       <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
-                       <p className="text-sm text-gray-300">{a.services.join(', ')} — {a.date} @ {a.time}</p>
-                       <p className={`text-xs mt-2 font-bold uppercase ${a.status==='confirmed'?'text-green-400':a.status==='cancelled'?'text-red-400':'text-blue-400'}`}>Status: {a.status}</p>
+              {otherAppts.map(a => {
+                const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
+                return (
+                  <div key={a.id} className="bg-black/50 p-5 border border-white/10 rounded-sm">
+                     <div className="flex flex-col md:flex-row justify-between gap-4">
+                       <div>
+                         <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
+                         <p className="text-sm text-gray-300">{sList} — {a.date} @ {a.time}</p>
+                         <p className={`text-xs mt-2 font-bold uppercase ${a.status==='confirmed'?'text-green-400':a.status==='cancelled'?'text-red-400':'text-blue-400'}`}>Status: {a.status}</p>
+                       </div>
+                       {a.referenceImage && <img src={a.referenceImage} alt="Ref" className="h-16 w-16 object-cover rounded-sm border border-white/10" />}
                      </div>
-                     {a.referenceImage && <img src={a.referenceImage} alt="Ref" className="h-16 w-16 object-cover rounded-sm border border-white/10" />}
-                   </div>
-                   
-                   {a.status === 'confirmed' && (
-                    <div className="mt-4 pt-4 border-t border-gray-800 flex gap-3">
-                      <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder="Interne Notizen (z.B. Skin fade #1...)" className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
-                      <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Notiz speichern</button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                     
+                     {a.status === 'confirmed' && (
+                      <div className="mt-4 pt-4 border-t border-gray-800 flex gap-3">
+                        <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder="Interne Notizen (z.B. Skin fade #1...)" className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
+                        <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Notiz speichern</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
