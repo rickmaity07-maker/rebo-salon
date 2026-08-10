@@ -1,19 +1,20 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, verifyBeforeUpdateEmail } from 'firebase/auth';
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 // --- TYPES & DATA MODELS ---
 type Theme = 'modern' | 'heritage';
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
-export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string };
+export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string; hasUpdatedPassword?: boolean };
 export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string; durationMins: number };
 export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
 export type Notification = { id: number; message: string; type: 'success' | 'info' | 'error' };
 export type TimeSlot = { id: string; time: string; isBooked: boolean };
 export type TranslationData = { [key: string]: { [key: string]: any } };
+export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
 
 export type Appointment = { 
   id: string; userId: string; name: string; phone: string; 
@@ -50,6 +51,7 @@ export interface AppContextType {
   loginEmail: (email: string, pass: string) => Promise<void>;
   registerEmail: (email: string, pass: string, name: string, phone?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateUserPassword: (oldPass: string, newPass: string) => Promise<void>;
   logout: () => void;
   appointments: Appointment[]; 
   addAppointment: (appt: Omit<Appointment, 'id'>) => Promise<void>;
@@ -58,11 +60,31 @@ export interface AppContextType {
   productsDB: ProductItem[]; addProduct: (p: Omit<ProductItem, 'id'>) => Promise<void>; deleteProduct: (id: string) => Promise<void>;
   notifications: Notification[]; addNotification: (msg: string, type?: 'success' | 'info' | 'error') => void;
   getAvailableSlots: (date: string, requiredDuration?: number) => TimeSlot[];
+  alerts: Alert[]; markAlertRead: (id: string) => Promise<void>; clearAlerts: () => Promise<void>;
 }
 
-// BASIS-WÖRTERBUCH (PRIMÄR: DEUTSCH)
+// COMPLETE GERMAN DICTIONARY WITH DYNAMIC KEYS FOR ALL NEW FEATURES
 const fallbackTranslations: TranslationData = {
-  de: { nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" }, hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, about: { title: "Über Uns", text: "Willkommen im Rebo Salon. Dein Look, unsere Leidenschaft." }, services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, auth: { loginTitle: "Anmelden", loginSub: "Melden Sie sich an, um einen Termin zu buchen.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?" }, booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihre Leistungen & Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistungen (Mehrfachauswahl möglich)", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet." }, profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern" } }
+  de: { 
+    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" }, 
+    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, 
+    about: { title: "Über Uns", text: "Willkommen im Rebo Salon. Dein Look, unsere Leidenschaft." }, 
+    services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
+    gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, 
+    products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
+    contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
+    auth: { 
+      loginTitle: "Anmelden", loginSub: "Melden Sie sich an, um einen Termin zu buchen.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?",
+      passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark",
+      ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen"
+    }, 
+    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihre Leistungen & Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistungen (Mehrfachauswahl möglich)", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet." }, 
+    profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern" },
+    notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
+    security: {
+      title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden"
+    }
+  }
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -81,6 +103,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [productsDB, setProductsDB] = useState<ProductItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
   const apiSecretHeader = { 'Content-Type': 'application/json', 'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET || '' };
@@ -128,7 +151,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setCurrentUser({...profile, photoURL: user.photoURL || ''});
             setIsAdminAuth(profile.role === 'admin');
           } else {
-            const newProfile: UserProfile = { id: user.uid, name: user.displayName || 'Kunde', email: user.email || '', phone: '', haircutCount: 0, role: 'user', photoURL: user.photoURL || '' };
+            const newProfile: UserProfile = { id: user.uid, name: user.displayName || 'Kunde', email: user.email || '', phone: '', haircutCount: 0, role: 'user', photoURL: user.photoURL || '', hasUpdatedPassword: true };
             setDoc(doc(db, 'users', user.uid), newProfile);
             setCurrentUser(newProfile); setIsAdminAuth(false);
           }
@@ -140,13 +163,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     const unsubTrans = onSnapshot(doc(db, 'settings', 'translations'), (snap) => {
-      if (snap.exists()) setTranslations({ ...fallbackTranslations, ...snap.data() });
+      if (snap.exists()) setTranslations({ ...fallbackTranslations, ...(snap.data() as TranslationData) });
     });
     const unsubSrv = onSnapshot(collection(db, 'services'), (snap) => { setServicesDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as ServiceItem))); });
     const unsubProd = onSnapshot(collection(db, 'products'), (snap) => { setProductsDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProductItem))); });
     const unsubAppts = onSnapshot(collection(db, 'appointments'), (snap) => { setAppointments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Appointment))); });
+    const unsubAlerts = onSnapshot(collection(db, 'alerts'), (snap) => { setAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Alert))); });
 
-    return () => { unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubAppts(); if (unsubUser) unsubUser(); };
+    return () => { unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubAppts(); unsubAlerts(); if (unsubUser) unsubUser(); };
   }, []);
 
   const changeLanguage = async (newLang: string) => {
@@ -164,9 +188,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (data.translatedDict) {
-        await updateDoc(doc(db, 'settings', 'translations'), { [newLang]: data.translatedDict });
+        setTranslations(prev => ({ ...prev, [newLang]: data.translatedDict }));
         setLang(newLang);
         addNotification(`Interface in neuer Sprache geladen!`, 'success');
+      } else {
+        addNotification(data.error || 'Übersetzung fehlgeschlagen.', 'error');
+        setLang('de');
       }
     } catch (e) {
       addNotification('Übersetzung fehlgeschlagen.', 'error');
@@ -209,7 +236,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const registerEmail = async (email: string, pass: string, name: string, phone?: string) => {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       const cleanPhone = phone ? phone.replace(/\s+/g, '') : '';
-      await setDoc(doc(db, 'users', cred.user.uid), { id: cred.user.uid, name, email, phone: cleanPhone, haircutCount: 0, role: 'user' });
+      await setDoc(doc(db, 'users', cred.user.uid), { id: cred.user.uid, name, email, phone: cleanPhone, haircutCount: 0, role: 'user', hasUpdatedPassword: true });
       setPageRouter('home'); addNotification("Konto erfolgreich erstellt!", 'success');
   };
 
@@ -220,12 +247,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) { addNotification(error.message, 'error'); }
   };
 
+  const updateUserPassword = async (oldPass: string, newPass: string) => {
+    if (!auth.currentUser || !currentUser) throw new Error("Nicht angemeldet.");
+    const credential = EmailAuthProvider.credential(currentUser.email, oldPass);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, newPass);
+    await updateDoc(doc(db, 'users', currentUser.id), { hasUpdatedPassword: true });
+    addNotification("Passwort erfolgreich aktualisiert!", "success");
+  };
+
   const logout = () => { signOut(auth); setPageRouter('home'); };
 
   const updateTranslation = async (l: string, section: string, key: string, val: string) => {
     if (!isAdminAuth) return;
     await updateDoc(doc(db, 'settings', 'translations'), { [`${l}.${section}.${key}`]: val });
     addNotification("Änderung gespeichert!", 'success');
+  };
+
+  const markAlertRead = async (id: string) => { await updateDoc(doc(db, 'alerts', id), { isRead: true }); };
+  const clearAlerts = async () => {
+    if (!currentUser) return;
+    const userAlerts = alerts.filter(a => a.userId === currentUser.id);
+    for (const a of userAlerts) { await deleteDoc(doc(db, 'alerts', a.id)); }
   };
 
   const addAppointment = async (appt: Omit<Appointment, 'id'>) => {
@@ -265,6 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const userEmail = userDoc.exists() ? userDoc.data().email : null;
 
     if (status === 'confirmed' && appt.status !== 'confirmed') {
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Termin am ${appt.date} um ${appt.time} Uhr wurde bestätigt!`, isRead: false, link: 'profile', createdAt: Date.now() });
         if (sendsms && appt.phone) {
           try { await fetch('/api/sms', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ phone: appt.phone.replace(/\s+/g, ''), message: `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr ist bestätigt!` }) }); } catch (e) {}
         }
@@ -272,10 +316,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           try { await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminbestätigung", message: `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!\n\nRebo Salon` }) }); addNotification("Status aktualisiert & E-Mail gesendet!", 'success'); } catch (e) {}
         }
     } else if (status === 'cancelled' && appt.status !== 'cancelled') {
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Terminanfrage für ${appt.date} wurde leider abgelehnt.`, isRead: false, link: 'profile', createdAt: Date.now() });
         if (userEmail) {
           try { await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminabsage", message: `Hallo ${appt.name},\n\nLeider mussten wir deinen Termin am ${appt.date} um ${appt.time} Uhr absagen.\n\nDein Rebo Salon Team` }) }); addNotification("Termin abgelehnt!", 'info'); } catch (e) {}
         }
     } else if (status === 'proposed' && appt.status !== 'proposed') {
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Neuer Terminvorschlag: ${proposedDate} um ${proposedTime}. Bitte bestätigen!`, isRead: false, link: 'profile', createdAt: Date.now() });
         if (userEmail) {
           try { await fetch('/api/email', { method: 'POST', headers: apiSecretHeader, body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminvorschlag", message: `Hallo ${appt.name},\n\nWir schlagen einen neuen Termin vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte im Profil bestätigen.\n\nDein Rebo Salon Team` }) }); addNotification("Terminvorschlag gesendet!", 'info'); } catch (e) {}
         }
@@ -289,14 +335,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addProduct = async (p: Omit<ProductItem, 'id'>) => { await addDoc(collection(db, 'products'), p); addNotification("Gespeichert!", 'success'); };
   const deleteProduct = async (id: string) => { await deleteDoc(doc(db, 'products', id)); addNotification("Gelöscht.", 'info'); };
 
-  const t = translations[lang] || fallbackTranslations.de;
+  const t = translations[lang] || fallbackTranslations[lang] || fallbackTranslations.de;
 
   return (
     <AppContext.Provider value={{ 
       lang, changeLanguage, isTranslatingUI, theme, setTheme, page, setPage: setPageRouter, t, updateTranslation,
-      isAdminAuth, currentUser, loginOAuth, loginEmail, registerEmail, resetPassword, logout,
+      isAdminAuth, currentUser, loginOAuth, loginEmail, registerEmail, resetPassword, updateUserPassword, logout,
       servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct,
-      appointments, addAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots
+      appointments, addAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots,
+      alerts, markAlertRead, clearAlerts
     }}>
       {children}
     </AppContext.Provider>
@@ -360,7 +407,7 @@ function LanguageSelector() {
             onChange={(e) => setSearch(e.target.value)}
             className={`w-full bg-black border p-2 rounded-sm text-xs text-white outline-none mb-2 ${isHeritage ? 'border-[#c5a059]/30 focus:border-[#c5a059]' : 'border-white/20 focus:border-[#d4af37]'}`}
           />
-          <div className="max-h-48 overflow-y-auto pr-1 space-y-1">
+          <div className="max-h-48 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
             {filteredLangs.map(l => (
               <button 
                 key={l.code}
@@ -372,6 +419,46 @@ function LanguageSelector() {
             ))}
             {filteredLangs.length === 0 && <p className="text-gray-500 text-[10px] p-2">Keine gefunden.</p>}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- NOTIFICATION BELL WIDGET ---
+function NotificationBell() {
+  const { alerts, currentUser, markAlertRead, clearAlerts, setPage, theme, t } = useApp();
+  const [isOpen, setIsOpen] = useState(false);
+  const isHeritage = theme === 'heritage';
+  
+  if (!currentUser) return null;
+
+  const userAlerts = alerts.filter(a => a.userId === currentUser.id).sort((a,b) => b.createdAt - a.createdAt);
+  const unreadCount = userAlerts.filter(a => !a.isRead).length;
+
+  const notifTrans = t.notifications || fallbackTranslations.de.notifications;
+
+  return (
+    <div className="relative group mx-2">
+      <button onClick={() => setIsOpen(!isOpen)} className={`relative p-2 rounded-full border transition-colors ${isHeritage ? 'border-[#c5a059]/30 text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-white/10 text-[#d4af37] hover:bg-[#d4af37] hover:text-black'}`}>
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+        {unreadCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border border-black text-[8px] flex items-center justify-center text-white font-bold animate-pulse">{unreadCount}</span>}
+      </button>
+      
+      {isOpen && (
+        <div className={`absolute right-0 mt-2 w-72 border rounded-sm shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
+          <h4 className="text-[10px] uppercase font-bold text-gray-500 mb-2 px-2 tracking-widest">{notifTrans.title}</h4>
+          <div className="max-h-64 overflow-y-auto custom-scrollbar">
+            {userAlerts.length === 0 ? <p className="text-xs text-gray-500 px-2 italic pb-2">{notifTrans.empty}</p> : 
+              userAlerts.map(a => (
+                <div key={a.id} onClick={() => { markAlertRead(a.id); setPage(a.link); setIsOpen(false); }} className={`p-3 border-b border-gray-800 cursor-pointer transition-colors rounded-sm ${!a.isRead ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                  <p className={`text-xs ${!a.isRead ? 'text-white font-bold' : 'text-gray-400'}`}>{a.message}</p>
+                  <p className="text-[9px] text-gray-600 mt-1 uppercase tracking-widest">{new Date(a.createdAt).toLocaleString()}</p>
+                </div>
+              ))
+            }
+          </div>
+          {userAlerts.length > 0 && <button onClick={() => { clearAlerts(); setIsOpen(false); }} className="w-full text-center text-[10px] text-red-400 hover:text-red-300 uppercase tracking-widest mt-2 pt-2 border-t border-gray-800">{notifTrans.clearAll}</button>}
         </div>
       )}
     </div>
@@ -406,6 +493,8 @@ function Navbar() {
           
           <div className="h-6 w-px bg-gray-700 mx-2"></div>
 
+          <NotificationBell />
+
           {currentUser ? (
             <div className="relative group mx-2">
               <button onClick={() => setPage('profile')} className={`w-10 h-10 rounded-full flex items-center justify-center border overflow-hidden transition-all ${isHeritage ? 'border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37] hover:text-black'}`}>
@@ -435,7 +524,8 @@ function Navbar() {
           <LanguageSelector />
         </div>
 
-        <div className="flex lg:hidden items-center gap-4 z-50 relative">
+        <div className="flex lg:hidden items-center gap-2 z-50 relative">
+          <NotificationBell />
           {!currentUser ? (
              <button onClick={() => setPage('auth')} className="p-2 text-gray-400 hover:text-white">
                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
@@ -452,7 +542,7 @@ function Navbar() {
           
           <LanguageSelector />
 
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 -mr-2 text-white focus:outline-none">
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-white focus:outline-none">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mobileMenuOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -515,7 +605,7 @@ function ToastContainer() {
 
 // --- AUTHENTICATION PORTAL ---
 function AuthView() {
-  const { theme, t, loginOAuth, loginEmail, registerEmail, resetPassword } = useApp();
+  const { theme, t, loginOAuth, loginEmail, registerEmail, resetPassword, addNotification } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
@@ -525,6 +615,19 @@ function AuthView() {
   const [inlineAuthError, setInlineAuthError] = useState('');
   const isHeritage = theme === 'heritage';
 
+  const authTrans = t.auth || fallbackTranslations.de.auth;
+
+  // Password Rules Calculation
+  const hasLength = pass.length >= 8;
+  const hasUpper = /[A-Z]/.test(pass);
+  const hasLower = /[a-z]/.test(pass);
+  const hasNum = /[0-9]/.test(pass);
+  const hasSpec = /[^A-Za-z0-9]/.test(pass);
+  const passScore = [hasLength, hasUpper, hasLower, hasNum, hasSpec].filter(Boolean).length;
+  const passWidth = `${(passScore / 5) * 100}%`;
+  const passColor = passScore <= 2 ? 'bg-red-500' : passScore <= 4 ? 'bg-yellow-500' : 'bg-green-500';
+  const passLabel = passScore <= 2 ? (authTrans.weak || 'Schwach') : passScore <= 4 ? (authTrans.medium || 'Mittel') : (authTrans.strong || 'Stark');
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setInlineAuthError('');
@@ -532,6 +635,10 @@ function AuthView() {
       if (isLogin) {
         await loginEmail(email, pass);
       } else {
+        if (!hasLength) {
+          setInlineAuthError("Das Passwort muss mindestens 8 Zeichen lang sein.");
+          return;
+        }
         if (!phoneInput || !name) { setInlineAuthError("Bitte füllen Sie alle Daten aus."); return; }
         const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
         await registerEmail(email, pass, name, fullPhone);
@@ -553,8 +660,8 @@ function AuthView() {
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 md:px-8 py-12">
         <div className="w-full max-w-md animate-in fade-in slide-in-from-right-8 duration-1000">
           <div className="mb-10 text-center">
-             <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{isLogin ? t.auth.loginTitle : t.auth.registerTitle}</h2>
-             <p className="text-gray-400 text-sm">{t.auth.loginSub}</p>
+             <h2 className={`text-3xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{isLogin ? authTrans.loginTitle : authTrans.registerTitle}</h2>
+             <p className="text-gray-400 text-sm">{authTrans.loginSub}</p>
           </div>
           <form onSubmit={handleEmailAuth} className={`p-6 md:p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
             <div className="space-y-4 mb-6">
@@ -569,8 +676,29 @@ function AuthView() {
                   </div>
                 </>
               )}
-              <input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={t.auth.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
-              <input required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={t.auth.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              <input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder={authTrans.email} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+              
+              <div>
+                <input required type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={authTrans.pass} className={`w-full border rounded-sm p-4 outline-none text-sm transition-colors ${isHeritage ? 'bg-[#1a1814] border-[#c5a059]/30 focus:border-[#c5a059]' : 'bg-black border-white/20 focus:border-[#d4af37]'}`} />
+                {!isLogin && pass.length > 0 && (
+                  <div className="mt-4 p-4 border border-white/5 bg-black/40 rounded-sm">
+                    <div className="flex justify-between items-center text-xs mb-2">
+                      <span className="text-gray-400">{authTrans.passStrength || 'Passwort-Stärke:'}</span>
+                      <span className={`${passColor.replace('bg-', 'text-')} font-bold uppercase tracking-widest`}>{passLabel}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mb-3">
+                      <div className={`h-full transition-all duration-300 ${passColor}`} style={{ width: passWidth }} />
+                    </div>
+                    <ul className="text-[10px] text-gray-500 space-y-1.5">
+                      <li className={hasLength ? 'text-green-400' : ''}>{hasLength ? '✓' : '○'} {authTrans.ruleLength || 'Mindestens 8 Zeichen'}</li>
+                      <li className={hasUpper ? 'text-green-400' : ''}>{hasUpper ? '✓' : '○'} {authTrans.ruleUpper || 'Ein Großbuchstabe'}</li>
+                      <li className={hasLower ? 'text-green-400' : ''}>{hasLower ? '✓' : '○'} {authTrans.ruleLower || 'Ein Kleinbuchstabe'}</li>
+                      <li className={hasNum ? 'text-green-400' : ''}>{hasNum ? '✓' : '○'} {authTrans.ruleNum || 'Eine Zahl'}</li>
+                      <li className={hasSpec ? 'text-green-400' : ''}>{hasSpec ? '✓' : '○'} {authTrans.ruleSpec || 'Ein Sonderzeichen'}</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
 
             {inlineAuthError && (
@@ -580,18 +708,18 @@ function AuthView() {
             )}
 
             <button type="submit" className={`w-full py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-all ${isHeritage ? 'bg-[#c5a059] text-[#1a1814] hover:bg-[#d6b471]' : 'bg-[#d4af37] text-black hover:bg-white'}`}>
-              {isLogin ? t.auth.loginBtn : t.auth.registerTitle}
+              {isLogin ? authTrans.loginBtn : authTrans.registerTitle}
             </button>
 
             {isLogin && (
               <button type="button" onClick={() => resetPassword(email)} className="text-xs text-gray-400 hover:text-white mt-4 block w-full text-center transition-colors underline">
-                {t.auth.resetPassBtn || "Passwort vergessen?"}
+                {authTrans.resetPassBtn || "Passwort vergessen?"}
               </button>
             )}
 
             <div className="mt-8 relative">
                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
-               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>{t.auth.social}</span></div>
+               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest"><span className={`px-4 ${isHeritage ? 'bg-[#141310] text-gray-500' : 'bg-[#111] text-gray-500'}`}>{authTrans.social}</span></div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 mt-6">
@@ -600,9 +728,9 @@ function AuthView() {
             </div>
 
             <p className="mt-8 text-center text-xs text-gray-400">
-              {isLogin ? t.auth.noAccount : t.auth.haveAccount} 
+              {isLogin ? authTrans.noAccount : authTrans.haveAccount} 
               <button type="button" onClick={() => { setIsLogin(!isLogin); setInlineAuthError(''); }} className={`ml-2 underline hover:text-white ${isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]'}`}>
-                {isLogin ? t.auth.register : t.auth.loginBtn}
+                {isLogin ? authTrans.register : authTrans.loginBtn}
               </button>
             </p>
           </form>
@@ -614,7 +742,7 @@ function AuthView() {
 
 // --- USER PROFILE & CRM VIEW ---
 function ProfileView() {
-  const { t, theme, currentUser, appointments, addNotification } = useApp();
+  const { t, theme, currentUser, appointments, addNotification, updateUserPassword } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   
   const [editName, setEditName] = useState('');
@@ -622,9 +750,30 @@ function ProfileView() {
   const [editCountryCode, setEditCountryCode] = useState('+49');
   const [editPhone, setEditPhone] = useState('');
 
+  // Password Update State
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [generatedPassOTP, setGeneratedPassOTP] = useState('');
+  const [inputPassOTP, setInputPassOTP] = useState('');
+  const [isVerifyingPassOTP, setIsVerifyingPassOTP] = useState(false);
+
   const isHeritage = theme === 'heritage';
   const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
   const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
+
+  const secTrans = t.security || fallbackTranslations.de.security;
+  const authTrans = t.auth || fallbackTranslations.de.auth;
+
+  // Force Password Update Check
+  const isEmailProvider = auth.currentUser?.providerData.some(p => p.providerId === 'password');
+  const [showForcePasswordModal, setShowForcePasswordModal] = useState(false);
+
+  useEffect(() => {
+    if (currentUser && isEmailProvider && currentUser.hasUpdatedPassword !== true) {
+      setShowForcePasswordModal(true);
+    }
+  }, [currentUser, isEmailProvider]);
 
   useEffect(() => {
     if (currentUser) {
@@ -656,12 +805,103 @@ function ProfileView() {
     } catch (err: any) { addNotification(err.message, "error"); }
   };
 
+  const handleSendPassOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPass !== confirmPass) return addNotification("Passwörter stimmen nicht überein.", "error");
+    if (newPass.length < 8) return addNotification("Passwort muss mindestens 8 Zeichen lang sein.", "error");
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedPassOTP(otp);
+    setIsVerifyingPassOTP(true);
+    
+    try {
+      await fetch('/api/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.NEXT_PUBLIC_INTERNAL_API_SECRET || '' },
+        body: JSON.stringify({
+          email: currentUser.email,
+          subject: "Rebo Salon: Passwortänderung Bestätigung",
+          message: `Hallo ${currentUser.name},\n\nDein Bestätigungscode zur Passwortänderung lautet: ${otp}\n\nFalls du diese Änderung nicht angefordert hast, ignoriere diese E-Mail.\n\nDein Rebo Salon Team`
+        })
+      });
+      addNotification("Bestätigungscode an E-Mail gesendet!", "info");
+    } catch (err) { addNotification("Fehler beim Senden des Codes.", "error"); setIsVerifyingPassOTP(false); }
+  };
+
+  const handleVerifyPassOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputPassOTP !== generatedPassOTP) return addNotification("Ungültiger Code. Bitte erneut versuchen.", "error");
+    try {
+      await updateUserPassword(oldPass, newPass);
+      setOldPass(''); setNewPass(''); setConfirmPass(''); setInputPassOTP(''); setIsVerifyingPassOTP(false);
+      setShowForcePasswordModal(false);
+    } catch (err: any) {
+      addNotification(err.message, "error");
+    }
+  };
+
+  // Password Rules Calculation
+  const hasLength = newPass.length >= 8;
+  const hasUpper = /[A-Z]/.test(newPass);
+  const hasLower = /[a-z]/.test(newPass);
+  const hasNum = /[0-9]/.test(newPass);
+  const hasSpec = /[^A-Za-z0-9]/.test(newPass);
+  const passScore = [hasLength, hasUpper, hasLower, hasNum, hasSpec].filter(Boolean).length;
+  const passWidth = `${(passScore / 5) * 100}%`;
+  const passColor = passScore <= 2 ? 'bg-red-500' : passScore <= 4 ? 'bg-yellow-500' : 'bg-green-500';
+  const passLabel = passScore <= 2 ? (authTrans.weak || 'Schwach') : passScore <= 4 ? (authTrans.medium || 'Mittel') : (authTrans.strong || 'Stark');
+
   const userAppts = appointments.filter(a => a.userId === currentUser.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const upcoming = userAppts.filter(a => a.status === 'pending' || a.status === 'proposed');
   const past = userAppts.filter(a => a.status === 'confirmed');
 
   return (
-    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20">
+    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
+      
+      {/* FORCE PASSWORD CHANGE MODAL FOR OLD USERS */}
+      {showForcePasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
+            <h3 className={`text-2xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase text-red-400'}`}>{secTrans.title}</h3>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">{secTrans.desc}</p>
+            
+            {!isVerifyingPassOTP ? (
+              <form onSubmit={handleSendPassOTP} className="space-y-4">
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.currentPass}</label>
+                   <input required type="password" value={oldPass} onChange={e=>setOldPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                 </div>
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.newPass}</label>
+                   <input required type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white mb-2" />
+                   {newPass.length > 0 && (
+                      <div className="mb-4">
+                        <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden mb-2"><div className={`h-full transition-all duration-300 ${passColor}`} style={{ width: passWidth }} /></div>
+                      </div>
+                   )}
+                 </div>
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.confirmPass}</label>
+                   <input required type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                 </div>
+                 <button type="submit" disabled={!hasLength} className={`w-full py-4 font-bold uppercase text-xs rounded-sm mt-4 disabled:opacity-50 ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>{secTrans.sendCode}</button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyPassOTP} className="space-y-5">
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.enterCode}</label>
+                  <input required type="text" maxLength={6} value={inputPassOTP} onChange={e => setInputPassOTP(e.target.value)} placeholder="------" className="w-full border border-white/20 rounded-sm p-4 outline-none text-2xl tracking-[0.5em] text-center font-mono bg-black text-white" />
+                </div>
+                <div className="flex gap-4 mt-8">
+                  <button type="button" onClick={() => setIsVerifyingPassOTP(false)} className="flex-1 py-4 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">{secTrans.cancel}</button>
+                  <button type="submit" className={`flex-1 py-4 uppercase text-xs font-bold text-black rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>{secTrans.confirmBtn}</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
          <div>
            <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
@@ -674,27 +914,78 @@ function ProfileView() {
       </div>
 
       {activeTab === 'settings' ? (
-        <form onSubmit={handleUpdateSettings} className={`p-6 md:p-10 border rounded-sm shadow-xl space-y-6 ${bgBorder}`}>
-           <h3 className="text-xl font-bold mb-4">Profil bearbeiten</h3>
-           <div>
-             <label className="block text-xs uppercase text-gray-400 mb-2">Vollständiger Name</label>
-             <input required value={editName} onChange={e=>setEditName(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
-           </div>
-           <div>
-             <label className="block text-xs uppercase text-gray-400 mb-2">E-Mail-Adresse (Änderung erfordert Bestätigung)</label>
-             <input required value={editEmail} onChange={e=>setEditEmail(e.target.value)} type="email" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
-           </div>
-           <div>
-             <label className="block text-xs uppercase text-gray-400 mb-2">Telefonnummer</label>
-             <div className="flex gap-2">
-                <select value={editCountryCode} onChange={e=>setEditCountryCode(e.target.value)} className="w-[30%] bg-black border border-white/20 p-4 rounded-sm text-white">
-                  {countryCodes.map(c => <option key={c.code} value={c.code}>{c.code} {c.label}</option>)}
-                </select>
-                <input required value={editPhone} onChange={e=>setEditPhone(e.target.value)} type="tel" className="w-[70%] bg-black border border-white/20 p-4 rounded-sm text-white" />
+        <div className={`p-6 md:p-10 border rounded-sm shadow-xl space-y-10 ${bgBorder}`}>
+           <form onSubmit={handleUpdateSettings} className="space-y-6">
+             <h3 className="text-xl font-bold mb-4">Profil bearbeiten</h3>
+             <div>
+               <label className="block text-xs uppercase text-gray-400 mb-2">Vollständiger Name</label>
+               <input required value={editName} onChange={e=>setEditName(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
              </div>
+             <div>
+               <label className="block text-xs uppercase text-gray-400 mb-2">E-Mail-Adresse (Änderung erfordert Bestätigung)</label>
+               <input required value={editEmail} onChange={e=>setEditEmail(e.target.value)} type="email" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+             </div>
+             <div>
+               <label className="block text-xs uppercase text-gray-400 mb-2">Telefonnummer</label>
+               <div className="flex gap-2">
+                  <select value={editCountryCode} onChange={e=>setEditCountryCode(e.target.value)} className="w-[30%] bg-black border border-white/20 p-4 rounded-sm text-white">
+                    {countryCodes.map(c => <option key={c.code} value={c.code}>{c.code} {c.label}</option>)}
+                  </select>
+                  <input required value={editPhone} onChange={e=>setEditPhone(e.target.value)} type="tel" className="w-[70%] bg-black border border-white/20 p-4 rounded-sm text-white" />
+               </div>
+             </div>
+             <button type="submit" className={`w-full py-4 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Einstellungen speichern</button>
+           </form>
+
+           <div className="border-t border-gray-800 pt-8">
+              <h3 className="text-xl font-bold mb-4 text-red-400">{secTrans.secTitle}</h3>
+              {!isEmailProvider ? (
+                <p className="text-sm text-gray-500 italic">{secTrans.oauthMsg}</p>
+              ) : !isVerifyingPassOTP ? (
+                <form onSubmit={handleSendPassOTP} className="space-y-4">
+                   <div>
+                     <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.currentPass}</label>
+                     <input required type="password" value={oldPass} onChange={e=>setOldPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                   </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.newPass}</label>
+                       <input required type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white mb-2" />
+                       {newPass.length > 0 && (
+                          <div className="mt-2 p-3 bg-black/40 border border-white/5 rounded-sm">
+                            <div className="flex justify-between items-center text-[10px] mb-2 uppercase tracking-widest"><span className="text-gray-500">{authTrans.passStrength || 'Stärke:'}</span><span className={passColor.replace('bg-', 'text-')}>{passLabel}</span></div>
+                            <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden mb-2"><div className={`h-full transition-all duration-300 ${passColor}`} style={{ width: passWidth }} /></div>
+                            <ul className="text-[9px] text-gray-500 grid grid-cols-2 gap-1">
+                              <li className={hasLength ? 'text-green-400' : ''}>{hasLength ? '✓' : '○'} {authTrans.ruleLength || '8+ Zeichen'}</li>
+                              <li className={hasUpper ? 'text-green-400' : ''}>{hasUpper ? '✓' : '○'} {authTrans.ruleUpper || 'Großbuchstabe'}</li>
+                              <li className={hasLower ? 'text-green-400' : ''}>{hasLower ? '✓' : '○'} {authTrans.ruleLower || 'Kleinbuchstabe'}</li>
+                              <li className={hasNum ? 'text-green-400' : ''}>{hasNum ? '✓' : '○'} {authTrans.ruleNum || 'Zahl'}</li>
+                              <li className={hasSpec ? 'text-green-400' : ''}>{hasSpec ? '✓' : '○'} {authTrans.ruleSpec || 'Sonderzeichen'}</li>
+                            </ul>
+                          </div>
+                       )}
+                     </div>
+                     <div>
+                       <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.confirmPass}</label>
+                       <input required type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                     </div>
+                   </div>
+                   <button type="submit" disabled={!hasLength} className="w-full md:w-auto px-8 py-3 bg-red-600/20 text-red-400 border border-red-600 font-bold uppercase text-xs rounded-sm mt-4 hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50">{secTrans.sendOtpBtn}</button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyPassOTP} className="space-y-4 max-w-sm">
+                  <div>
+                    <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.enterCode}</label>
+                    <input required type="text" maxLength={6} value={inputPassOTP} onChange={e => setInputPassOTP(e.target.value)} placeholder="------" className="w-full border border-white/20 rounded-sm p-4 outline-none text-2xl tracking-[0.5em] text-center font-mono bg-black text-white" />
+                  </div>
+                  <div className="flex gap-4 mt-4">
+                    <button type="button" onClick={() => setIsVerifyingPassOTP(false)} className="flex-1 py-3 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">{secTrans.cancel}</button>
+                    <button type="submit" className={`flex-1 py-3 uppercase text-xs font-bold text-black rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>{secTrans.confirmBtn}</button>
+                  </div>
+                </form>
+              )}
            </div>
-           <button type="submit" className={`w-full py-4 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Einstellungen speichern</button>
-        </form>
+        </div>
       ) : (
         <>
           <div className={`p-6 md:p-8 mb-6 border rounded-sm flex items-center justify-between shadow-xl ${bgBorder}`}>
