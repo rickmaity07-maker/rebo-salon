@@ -4,7 +4,11 @@ import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
 import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
-type Language = 'de' | 'en';
+// NOTE: broadened from 'de' | 'en' to a general string so changeLanguage can
+// support any of the extra languages (es, fr, it, nl, tr, pl, ru, ar, zh, ja...).
+// Every place that previously used 'de'/'en' literals still works fine, since
+// those are still valid strings.
+type Language = string;
 type Theme = 'modern' | 'heritage';
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
@@ -32,6 +36,8 @@ const initialSlots: TimeSlot[] = [
 
 export interface AppContextType {
   lang: Language; setLang: (lang: Language) => void;
+  changeLanguage: (newLang: string) => Promise<void>;
+  isTranslatingUI: boolean;
   theme: Theme; setTheme: (theme: Theme) => void;
   page: Page; setPage: (page: Page) => void;
   t: any; updateTranslation: (lang: Language, section: string, key: string, val: string) => Promise<void>;
@@ -60,6 +66,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>('de'); 
+  const [isTranslatingUI, setIsTranslatingUI] = useState(false);
   const [theme, setTheme] = useState<Theme>('modern'); 
   const [page, setPageState] = useState<Page>('home');
   const [translations, setTranslations] = useState<TranslationData>(fallbackTranslations);
@@ -145,8 +152,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // Merge with fallbackTranslations so any language not yet cached in
+    // Firestore still safely falls back instead of leaving gaps.
     const unsubTrans = onSnapshot(doc(db, 'settings', 'translations'), (snap) => {
-      if (snap.exists()) setTranslations(snap.data() as TranslationData);
+      if (snap.exists()) setTranslations({ ...fallbackTranslations, ...(snap.data() as TranslationData) });
     });
     const unsubSrv = onSnapshot(collection(db, 'services'), (snap) => {
       setServicesDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as ServiceItem)));
@@ -160,6 +169,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return () => { unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubAppts(); if (unsubUser) unsubUser(); };
   }, []);
+
+  // --- AI-ASSISTED UI TRANSLATION (DeepL, cached server-side via Admin SDK) ---
+  const changeLanguage = async (newLang: string) => {
+    if (newLang === lang) return;
+    if (newLang === 'de' || translations[newLang]) {
+      setLang(newLang);
+      return;
+    }
+
+    setIsTranslatingUI(true);
+    try {
+      const res = await fetch('/api/translate-ui', {
+        method: 'POST',
+        headers: apiSecretHeader,
+        body: JSON.stringify({ targetLang: newLang, sourceDict: fallbackTranslations.de })
+      });
+      const data = await res.json();
+      if (data.translatedDict) {
+        // Applied locally right away; the server already persisted this to
+        // Firestore via the Admin SDK, so future visitors get it from the
+        // onSnapshot listener above without needing a fresh DeepL call.
+        setTranslations(prev => ({ ...prev, [newLang]: data.translatedDict }));
+        setLang(newLang);
+        addNotification(`Interface in neuer Sprache geladen!`, 'success');
+      } else {
+        addNotification(data.error || 'Übersetzung fehlgeschlagen.', 'error');
+        setLang('de');
+      }
+    } catch (e) {
+      addNotification('Übersetzung fehlgeschlagen.', 'error');
+      setLang('de');
+    } finally {
+      setIsTranslatingUI(false);
+    }
+  };
 
   const getAvailableSlots = (date: string) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
@@ -349,11 +393,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addProduct = async (p: Omit<ProductItem, 'id'>) => { await addDoc(collection(db, 'products'), p); addNotification("Added!", 'success'); };
   const deleteProduct = async (id: string) => { await deleteDoc(doc(db, 'products', id)); addNotification("Deleted.", 'info'); };
 
-  const t = translations[lang] || fallbackTranslations[lang];
+  const t = translations[lang] || fallbackTranslations[lang] || fallbackTranslations.de;
 
   return (
     <AppContext.Provider value={{ 
-      lang, setLang, theme, setTheme, page, setPage: setPageRouter, t, updateTranslation,
+      lang, setLang, changeLanguage, isTranslatingUI, theme, setTheme, page, setPage: setPageRouter, t, updateTranslation,
       isAdminAuth, currentUser, loginOAuth, loginEmail, registerEmail, resetPassword, logout,
       servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct,
       appointments, addAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots

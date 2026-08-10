@@ -327,8 +327,7 @@ function LanguageSelector() {
     { code: 'ru', name: 'Русский' },
     { code: 'ar', name: 'العربية' },
     { code: 'zh', name: '中文' },
-    { code: 'ja', name: '日本語' },
-    { code: 'hi', name: 'हिन्दी' },
+    { code: 'ja', name: '日本語' }
   ];
 
   const filteredLangs = languages.filter(l => l.name.toLowerCase().includes(search.toLowerCase()) || l.code.toLowerCase().includes(search.toLowerCase()));
