@@ -17,7 +17,8 @@ const nextConfig = {
               "font-src 'self' data: https://fonts.gstatic.com",
               "img-src 'self' data: https: blob: https://images.unsplash.com https://firebasestorage.googleapis.com",
               "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.mymemory.translated.net https://api-free.deepl.com https://api.deepl.com https://www.google-analytics.com https://region1.google-analytics.com wss://*.firebaseio.com",
-              "frame-src 'self' https://accounts.google.com https://www.facebook.com",
+              // CRITICAL FIX FOR FIREBASE AUTH:
+             "frame-src 'self' https://accounts.google.com https://www.facebook.com https://rebo-salon.firebaseapp.com https://maps.google.com https://www.google.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
@@ -61,7 +62,7 @@ const nextConfig = {
           // Cross-Origin policies
           {
             key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
+            value: 'same-origin-allow-popups', // Changed this to allow OAuth popups to communicate!
           },
           {
             key: 'Cross-Origin-Resource-Policy',

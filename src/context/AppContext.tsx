@@ -5,7 +5,6 @@ import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPass
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc, DocumentReference } from 'firebase/firestore';
 
 type Language = string;
-type Theme = 'modern' | 'heritage';
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
 export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string; hasUpdatedPassword?: boolean };
@@ -37,7 +36,6 @@ export interface AppContextType {
   lang: Language; setLang: (lang: Language) => void;
   changeLanguage: (newLang: string) => Promise<void>;
   isTranslatingUI: boolean;
-  theme: Theme; setTheme: (theme: Theme) => void;
   page: Page; setPage: (page: Page) => void;
   t: any; updateTranslation: (lang: Language, section: string, key: string, val: string) => Promise<void>;
   isAdminAuth: boolean;
@@ -61,7 +59,7 @@ export interface AppContextType {
 export const fallbackTranslations: TranslationData = {
   de: { 
     common: { loading: "Lädt...", searchLang: "Sprache suchen...", noResults: "Keine gefunden.", footer: "Alle Rechte vorbehalten.", design: "Design", at: "um", by: "bei" },
-    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil", logout: "Abmelden", admin: "Admin Panel" }, 
+    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Profil", logout: "Abmelden", admin: "Admin Panel" }, 
     hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, 
     about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, 
     services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
@@ -72,11 +70,13 @@ export const fallbackTranslations: TranslationData = {
     booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen" }, 
     profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern", welcome: "Willkommen zurück", overview: "Übersicht", settings: "Einstellungen", editProfile: "Profil bearbeiten", contactData: "Kontaktdaten", noPhone: "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen.", acceptTime: "Zeit Akzeptieren", cancel: "Stornieren", pending: "Ausstehend", completed: "Abgeschlossen", newProposal: "Neuer Terminvorschlag vom Salon:" }, 
     notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
-    security: { title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden" }
+    security: { title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden" },
+    admin: { title: "Admin Control Panel", tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern" } },
+    alertsMsg: { confirmed1: "Dein Termin am", confirmed2: "Uhr wurde bestätigt!", cancelled1: "Dein Termin am", cancelled2: "wurde leider storniert.", proposed1: "Neuer Termin-Vorschlag:", proposed2: "Bitte bestätigen!" }
   },
   en: { 
     common: { loading: "Loading...", searchLang: "Search language...", noResults: "None found.", footer: "All rights reserved.", design: "Design", at: "at", by: "with" },
-    nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "My Profile", logout: "Log Out", admin: "Admin Panel" }, 
+    nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "Profile", logout: "Log Out", admin: "Admin Panel" }, 
     hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." }, 
     about: { title: "About Us", text: "Welcome to Rebo Salon." }, 
     services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday", min: "minutes" }, 
@@ -87,7 +87,9 @@ export const fallbackTranslations: TranslationData = {
     booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment" }, 
     profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note", welcome: "Welcome back", overview: "Overview", settings: "Settings", editProfile: "Edit Profile", contactData: "Contact Data", noPhone: "No phone number saved. Please add in settings.", acceptTime: "Accept Time", cancel: "Cancel", pending: "Pending", completed: "Completed", newProposal: "New appointment proposal from salon:" }, 
     notifications: { title: "Notifications", empty: "No notifications.", clearAll: "Clear All" },
-    security: { title: "Security Update", desc: "We updated our security standards. Please change your password to continue.", currentPass: "Current Password", newPass: "New Password", confirmPass: "Confirm New Password", sendCode: "Send code via E-Mail", enterCode: "E-Mail verification code", cancel: "Cancel", confirmBtn: "Confirm & Change", secTitle: "Password & Security", oauthMsg: "You are logged in via a third party (Google/Facebook). Password changes are not available here.", sendOtpBtn: "Send OTP via E-Mail" }
+    security: { title: "Security Update", desc: "We updated our security standards. Please change your password to continue.", currentPass: "Current Password", newPass: "New Password", confirmPass: "Confirm New Password", sendCode: "Send code via E-Mail", enterCode: "E-Mail verification code", cancel: "Cancel", confirmBtn: "Confirm & Change", secTitle: "Password & Security", oauthMsg: "You are logged in via a third party (Google/Facebook). Password changes are not available here.", sendOtpBtn: "Send OTP via E-Mail" },
+    admin: { title: "Admin Control Panel", tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", uploadImg: "Upload Product Image", saveBtn: "Save Product" } },
+    alertsMsg: { confirmed1: "Your appointment on", confirmed2: "has been confirmed!", cancelled1: "Your appointment on", cancelled2: "has been cancelled.", proposed1: "New appointment proposal:", proposed2: "Please confirm!" }
   }
 };
 
@@ -96,7 +98,6 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>('de'); 
   const [isTranslatingUI, setIsTranslatingUI] = useState(false);
-  const [theme, setTheme] = useState<Theme>('modern'); 
   const [page, setPageState] = useState<Page>('home');
   const [translations, setTranslations] = useState<TranslationData>(fallbackTranslations);
   
@@ -264,7 +265,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // --- OVERBOOKING LOGIC (Duration Based overlap prevention) ---
   const timeToMins = (t: string) => { 
     const [h, m] = t.split(':').map(Number); 
     return h * 60 + m; 
@@ -284,7 +284,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const newStart = slotMins;
         const newEnd = slotMins + requiredDuration;
         
-        // Prevent booking if any existing appointment overlaps the required duration
         return newStart < aEnd && newEnd > aStart;
       });
       return { ...slot, isBooked: isOverlapping };
@@ -383,7 +382,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return docRef;
   };
 
-  // --- ADMIN & USER STATUS UPDATING (With complete Email Coverage) ---
   const updateAppointmentStatus = async (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => {
     const appt = appointments.find(a => a.id === id);
     if (!appt) return;
@@ -391,21 +389,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updates: any = { status };
     if (notes !== undefined) updates.notes = notes;
 
-    // Handle user accepting a reschedule: overwrite main date with proposal
     if (status === 'confirmed' && proposedDate && proposedTime) {
       updates.date = proposedDate;
       updates.time = proposedTime;
       updates.proposedDate = null;
       updates.proposedTime = null;
     } else {
-      // Just saving a proposal
       if (proposedDate) updates.proposedDate = proposedDate;
       if (proposedTime) updates.proposedTime = proposedTime;
     }
     
     await updateDoc(doc(db, 'appointments', id), updates);
 
-    // Reward adjustment if cancelled
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
       const userDoc = await getDoc(userRef);
@@ -422,13 +417,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const finalDate = (status === 'confirmed' && proposedDate) ? proposedDate : (proposedDate || appt.date);
     const finalTime = (status === 'confirmed' && proposedTime) ? proposedTime : (proposedTime || appt.time);
 
+    const tAlert = translations[lang]?.alertsMsg || fallbackTranslations[lang]?.alertsMsg || fallbackTranslations.de.alertsMsg;
+    const tCommon = translations[lang]?.common || fallbackTranslations[lang]?.common || fallbackTranslations.de.common;
+
     if (status === 'confirmed' && appt.status !== 'confirmed') {
         if (sendsms && appt.phone) {
           const cleanPhone = appt.phone.replace(/\s+/g, '');
           fetch('/api/sms', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ phone: cleanPhone, message: `Rebo Salon: Dein Termin am ${finalDate} um ${finalTime} Uhr ist bestätigt!` }) }).catch(()=>{});
         }
         
-        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Dein Termin am ${finalDate} um ${finalTime} Uhr wurde bestätigt!`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `${tAlert.confirmed1} ${finalDate} ${tCommon.at} ${finalTime} ${tAlert.confirmed2}`, isRead: false, link: 'profile', createdAt: Date.now() });
         await sendDualEmail(
           userEmail,
           "Rebo Salon: Terminbestätigung",
@@ -439,7 +437,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addNotification("Status aktualisiert & Bestätigungs-E-Mails gesendet!", 'success');
         
     } else if (status === 'cancelled' && appt.status !== 'cancelled') {
-        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Dein Termin am ${appt.date} wurde leider storniert.`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `${tAlert.cancelled1} ${appt.date} ${tAlert.cancelled2}`, isRead: false, link: 'profile', createdAt: Date.now() });
         await sendDualEmail(
           userEmail,
           "Rebo Salon: Terminabsage",
@@ -450,7 +448,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addNotification("Termin abgelehnt & Absage-E-Mail gesendet!", 'info');
 
     } else if (status === 'proposed' && appt.status !== 'proposed') {
-        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Neuer Termin-Vorschlag: ${proposedDate} um ${proposedTime}. Bitte bestätigen!`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `${tAlert.proposed1} ${proposedDate} ${tCommon.at} ${proposedTime}. ${tAlert.proposed2}`, isRead: false, link: 'profile', createdAt: Date.now() });
         await sendDualEmail(
           userEmail,
           "Rebo Salon: Terminvorschlag / Bitte bestätigen",
@@ -474,7 +472,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{ 
-      lang, setLang, changeLanguage, isTranslatingUI, theme, setTheme, page, setPage: setPageRouter, t, updateTranslation,
+      lang, setLang, changeLanguage, isTranslatingUI, page, setPage: setPageRouter, t, updateTranslation,
       isAdminAuth, currentUser, loginOAuth, loginEmail, registerEmail, resetPassword, updateUserPassword, logout,
       servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct,
       appointments, addAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots,
