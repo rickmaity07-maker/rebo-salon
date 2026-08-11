@@ -391,7 +391,7 @@ function ProfileViewLocal() {
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
       {showForcePasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
             <h3 className={`text-2xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase text-red-400'}`}>{secTrans.title}</h3>
             <p className="text-gray-400 text-sm mb-6 leading-relaxed">{secTrans.desc}</p>
@@ -1212,7 +1212,7 @@ function MainContent() {
       <ToastContainer />
       
       {/* Top Navbar Actions */}
-      <div className="fixed top-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+      <div className="fixed top-0 w-full z-50 p-4 flex justify-between items-center bg-linear-to-b from-black/80 to-transparent pointer-events-none">
          <div className="pointer-events-auto flex items-center">
             <LanguageSelector />
          </div>
@@ -1247,7 +1247,7 @@ function MainContent() {
                 <section className="relative min-h-[75vh] md:min-h-[85vh] flex items-center justify-center pt-28 px-4 overflow-hidden">
                   <div className="absolute inset-0 z-0">
                     <div className="absolute inset-0 bg-[#0a0a0a]/70 z-10" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent z-10" />
+                    <div className="absolute inset-0 bg-linear-to-t from-[#0a0a0a] via-transparent to-transparent z-10" />
                     <img src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=1600&q=80" className="w-full h-full object-cover grayscale-30" alt="Salon Background" />
                   </div>
                   <div className="relative z-20 text-center max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
@@ -1305,7 +1305,7 @@ function MainContent() {
             <div className={`text-center mb-12 pb-8 ${isHeritage ? 'border-b border-[#c5a059]/20' : ''}`}>
                <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'uppercase tracking-tight'}`}>{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[75px] md:auto-rows-[150px]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-18.75 md:auto-rows-37.5">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -1332,7 +1332,7 @@ function MainContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
                 <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`} style={{ animationDelay: `${idx * 150}ms` }}>
-                  <div className="w-full aspect-square md:aspect-[4/5] overflow-hidden bg-black/50 relative group">
+                  <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
                   <div className="p-6 md:p-8 flex flex-col grow relative">
