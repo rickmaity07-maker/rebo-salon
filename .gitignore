@@ -13,3 +13,10 @@ service-account.jsonnode_modules/
 
 node_modules/
 .next/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

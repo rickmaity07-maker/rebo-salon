@@ -26,7 +26,7 @@ const initialSlots: TimeSlot[] = [
 ]; 
 
 function LanguageSelector() {
-  const { lang, changeLanguage, isTranslatingUI, theme } = useApp();
+  const { lang, changeLanguage, isTranslatingUI, theme, t } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   
@@ -49,7 +49,7 @@ function LanguageSelector() {
         className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-bold transition-colors ${isHeritage ? 'border-[#c5a059]/50 text-[#c5a059] hover:text-white' : 'border-gray-700 text-gray-300 hover:text-white'}`}
       >
         {isTranslatingUI ? (
-          <span className="animate-pulse">Lädt...</span>
+          <span className="animate-pulse">{t.common?.loading || 'Lädt...'}</span>
         ) : (
           <>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -62,7 +62,7 @@ function LanguageSelector() {
         <div className={`absolute right-0 mt-2 w-48 border rounded-sm shadow-2xl p-2 animate-in fade-in zoom-in-95 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
           <input 
             type="text" 
-            placeholder="Sprache suchen..." 
+            placeholder={t.common?.searchLang || "Sprache suchen..."} 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className={`w-full bg-black border p-2 rounded-sm text-xs text-white outline-none mb-2 ${isHeritage ? 'border-[#c5a059]/30 focus:border-[#c5a059]' : 'border-white/20 focus:border-[#d4af37]'}`}
@@ -77,7 +77,7 @@ function LanguageSelector() {
                 {l.name}
               </button>
             ))}
-            {filteredLangs.length === 0 && <p className="text-gray-500 text-[10px] p-2">Keine gefunden.</p>}
+            {filteredLangs.length === 0 && <p className="text-gray-500 text-[10px] p-2">{t.common?.noResults || "Keine gefunden."}</p>}
           </div>
         </div>
       )}
@@ -436,18 +436,18 @@ function ProfileViewLocal() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
          <div>
            <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
-           <p className="text-gray-400 text-sm md:text-base">Willkommen zurück, {currentUser.name}</p>
+           <p className="text-gray-400 text-sm md:text-base">{t.profile?.welcome || 'Willkommen zurück'}, {currentUser.name}</p>
          </div>
          <div className="flex gap-2 bg-black border border-white/10 p-1 rounded-sm">
-            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'overview' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>Übersicht</button>
-            <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'settings' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>Einstellungen</button>
+            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'overview' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>{t.profile?.overview || 'Übersicht'}</button>
+            <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'settings' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>{t.profile?.settings || 'Einstellungen'}</button>
          </div>
       </div>
 
       {activeTab === 'settings' ? (
         <div className={`p-6 md:p-10 border rounded-sm shadow-xl space-y-10 ${bgBorder}`}>
            <form onSubmit={handleUpdateSettings} className="space-y-6">
-             <h3 className="text-xl font-bold mb-4">Profil bearbeiten</h3>
+             <h3 className="text-xl font-bold mb-4">{t.profile?.editProfile || 'Profil bearbeiten'}</h3>
              <div>
                <label className="block text-xs uppercase text-gray-400 mb-2">Vollständiger Name</label>
                <input required value={editName} onChange={e=>setEditName(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
@@ -521,9 +521,9 @@ function ProfileViewLocal() {
         <>
           <div className={`p-6 md:p-8 mb-6 border rounded-sm flex items-center justify-between shadow-xl ${bgBorder}`}>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">Kontaktdaten</p>
+              <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">{t.profile?.contactData || 'Kontaktdaten'}</p>
               <p className="text-lg font-bold">{currentUser.email}</p>
-              <p className="text-gray-300 mt-1">{currentUser.phone || "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen."}</p>
+              <p className="text-gray-300 mt-1">{currentUser.phone || t.profile?.noPhone || 'Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen.'}</p>
             </div>
             <button onClick={() => setActiveTab('settings')} className="p-3 border border-white/20 rounded-sm hover:bg-white/5 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -548,19 +548,19 @@ function ProfileViewLocal() {
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
                       <p className="font-bold text-base">{sList}</p>
-                      <p className="text-xs text-gray-400 mb-3">{a.date} um {a.time} bei {a.stylist} ({a.totalDurationMins || 60} Min)</p>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} {t.common?.at || 'um'} {a.time} {t.common?.by || 'bei'} {a.stylist} ({a.totalDurationMins || 60} {t.services?.min || 'Minuten'})</p>
                       
                       {a.status === 'proposed' ? (
                         <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-sm">
-                          <p className="text-blue-400 text-xs font-bold mb-2">⚠️ Neuer Terminvorschlag vom Salon:</p>
+                          <p className="text-blue-400 text-xs font-bold mb-2">⚠️ {t.profile?.newProposal || 'Neuer Terminvorschlag vom Salon:'}</p>
                           <p className="text-white text-sm mb-3">{a.proposedDate} um {a.proposedTime} Uhr</p>
                           <div className="flex gap-2">
-                            <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', true, undefined, a.proposedDate, a.proposedTime)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold uppercase rounded-sm">Zeit Akzeptieren</button>
-                            <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 hover:bg-red-500/10 px-3 py-1.5 text-xs font-bold uppercase rounded-sm">Stornieren</button>
+                            <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', true, undefined, a.proposedDate, a.proposedTime)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold uppercase rounded-sm">{t.profile?.acceptTime || 'Zeit Akzeptieren'}</button>
+                            <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 hover:bg-red-500/10 px-3 py-1.5 text-xs font-bold uppercase rounded-sm">{t.profile?.cancel || 'Stornieren'}</button>
                           </div>
                         </div>
                       ) : (
-                        <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">Ausstehend</span>
+                        <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{t.profile?.pending || 'Ausstehend'}</span>
                       )}
                     </div>
                   );
@@ -577,8 +577,8 @@ function ProfileViewLocal() {
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
                       <p className="font-bold text-base">{sList}</p>
-                      <p className="text-xs text-gray-400 mb-3">{a.date} bei {a.stylist}</p>
-                      <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Abgeschlossen</span>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} {t.common?.by || 'bei'} {a.stylist}</p>
+                      <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">{t.profile?.completed || 'Abgeschlossen'}</span>
                     </div>
                   );
                 })}
@@ -854,7 +854,7 @@ function AdminView() {
               <div key={s.id} className={`p-5 flex justify-between items-center border rounded-sm ${bgBorder}`}>
                 <div>
                   <p className="font-bold">{s.name}</p>
-                  <p className="text-xs text-gray-400 mt-1">{s.durationMins || 60} Minuten</p>
+                  <p className="text-xs text-gray-400 mt-1">⏱ {s.durationMins || 60} Minuten</p>
                 </div>
                 <div className="text-right">
                   <p className={primaryColor}>{s.price}</p>
@@ -1039,7 +1039,7 @@ function BookingView() {
           {submitted ? (
             <div className={`p-8 border rounded-sm text-center ${isHeritage ? 'border-[#c5a059] bg-[#c5a059]/10 text-[#c5a059]' : 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]'}`}>
               <p className="font-semibold text-lg mb-6">{t.booking.success}</p>
-              <button onClick={() => { setSubmitted(false); setSelectedServices([]); }} className="text-xs uppercase font-bold underline">Neuen Termin anfragen</button>
+              <button onClick={() => { setSubmitted(false); setSelectedServices([]); }} className="text-xs uppercase font-bold underline">{t.booking?.bookNew || 'Neuen Termin anfragen'}</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className={`space-y-6 p-6 md:p-8 border rounded-sm shadow-2xl ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
@@ -1069,14 +1069,14 @@ function BookingView() {
                         <div key={s.id} onClick={() => handleToggleService(s)} className={`cursor-pointer border p-3 flex justify-between items-center rounded-sm transition-colors ${isSelected ? (isHeritage ? 'border-[#c5a059] bg-[#c5a059]/10' : 'border-[#d4af37] bg-[#d4af37]/10') : 'border-white/10 hover:border-white/30'}`}>
                            <div>
                               <p className={`font-bold text-sm ${isSelected ? (isHeritage ? 'text-[#c5a059]':'text-[#d4af37]') : 'text-white'}`}>{s.name}</p>
-                              <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">⏱ {s.durationMins || 60} {t.services.min}</p>
+                              <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">⏱ {s.durationMins || 60} {t.services?.min || 'Minuten'}</p>
                            </div>
                            <p className="text-sm font-bold">{s.price}</p>
                         </div>
                      )
                    })}
                  </div>
-                 {selectedServices.length > 0 && <p className="text-xs text-right mt-2 text-gray-400">Gesamtdauer: <strong className="text-white">{totalDuration} {t.services.min}</strong></p>}
+                 {selectedServices.length > 0 && <p className="text-xs text-right mt-2 text-gray-400">{t.booking?.totalDuration || 'Gesamtdauer:'} <strong className="text-white">{totalDuration} {t.services?.min || 'Minuten'}</strong></p>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1087,7 +1087,7 @@ function BookingView() {
                   </select>
                 </div>
                 <div>
-                    <label className="block text-xs uppercase text-gray-400 mb-2">Referenzbild (Optional)</label>
+                    <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking?.refImage || 'Referenzbild (Optional)'}</label>
                     {refImagePreview ? (
                       <div className="relative group">
                         <img src={refImagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-sm border border-white/20 mb-2" />
@@ -1126,7 +1126,7 @@ function BookingView() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex-1 border border-dashed border-white/10 flex items-center justify-center p-4 rounded-sm"><p className="text-xs text-gray-500">Wählen Sie zuerst ein Datum.</p></div>
+                    <div className="flex-1 border border-dashed border-white/10 flex items-center justify-center p-4 rounded-sm"><p className="text-xs text-gray-500">{t.booking?.pickDateFirst || 'Wählen Sie zuerst ein Datum.'}</p></div>
                   )}
                 </div>
               </div>
@@ -1181,9 +1181,6 @@ function ContactView() {
                <div className="flex gap-4">
                  <a href="https://www.instagram.com/rebo_salon/" target="_blank" rel="noopener noreferrer" className={`w-14 h-14 flex items-center justify-center rounded-full border transition-all ${isHeritage ? 'border-[#c5a059]/30 text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-white/20 text-[#d4af37] hover:border-[#d4af37]'}`}>
                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path fillRule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z" clipRule="evenodd" /></svg>
-                 </a>
-                 <a href="https://www.tiktok.com/@rebo.salon" target="_blank" rel="noopener noreferrer" className={`w-14 h-14 flex items-center justify-center rounded-full border transition-all ${isHeritage ? 'border-[#c5a059]/30 text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-white/20 text-[#d4af37] hover:border-[#d4af37]'}`}>
-                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>
                  </a>
                </div>
             </div>
@@ -1291,7 +1288,7 @@ function MainContent() {
                 <div key={item.id} className={`flex items-end justify-between p-4 md:p-6 rounded-sm shadow-lg ${isHeritage ? 'border-b border-[#c5a059]/30 bg-[#141310]' : 'bg-[#111] border border-white/10'}`}>
                   <div>
                      <h3 className={`text-lg md:text-xl font-medium ${isHeritage ? 'font-serif-custom text-white' : ''}`}>{item.name}</h3>
-                     <p className="text-xs text-gray-500 mt-1">⏱ {item.durationMins || 60} {t.services.min}</p>
+                     <p className="text-xs text-gray-500 mt-1">⏱ {item.durationMins || 60} {t.services?.min || 'Minuten'}</p>
                   </div>
                   <div className="text-right flex items-center gap-3">
                     {item.oldPrice && <span className="text-xs md:text-sm text-gray-500 line-through">statt {item.oldPrice}</span>}
@@ -1355,7 +1352,7 @@ function MainContent() {
       {page !== 'admin' && page !== 'booking' && page !== 'contact' && page !== 'auth' && page !== 'profile' && (
         <footer className={`w-full py-6 text-center text-xs tracking-wider border-t ${isHeritage ? 'border-[#c5a059]/10 text-gray-600' : 'border-white/5 text-gray-500'}`}>
           <p>
-            © {new Date().getFullYear()} Rebo Salon. Alle Rechte vorbehalten. 
+            © {new Date().getFullYear()} Rebo Salon. {t.common?.footer || 'Alle Rechte vorbehalten.'}
             <span onDoubleClick={() => setPage('admin')} className="cursor-default select-none ml-1 opacity-0 hover:opacity-10 transition-opacity">.</span>
           </p>
         </footer>
@@ -1364,7 +1361,7 @@ function MainContent() {
       {/* Floating Theme Controller */}
       <div className="fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 backdrop-blur-xl border border-gray-700/50 p-1.5 md:p-2 rounded-full shadow-2xl flex items-center gap-1.5 md:gap-2">
          <div className="px-3 md:px-4 py-1 border-r border-gray-700 hidden sm:block">
-            <span className="text-gray-400 text-[10px] md:text-xs font-semibold uppercase tracking-wider">Design</span>
+            <span className="text-gray-400 text-[10px] md:text-xs font-semibold uppercase tracking-wider">{t.common?.design || 'Design'}</span>
          </div>
          <button onClick={() => setTheme('modern')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-medium transition-all ${theme === 'modern' ? 'bg-[#d4af37] text-black shadow-lg' : 'text-gray-300 hover:bg-gray-800'}`}>Modern</button>
          <button onClick={() => setTheme('heritage')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-medium transition-all ${theme === 'heritage' ? 'bg-[#c5a059] text-black shadow-lg' : 'text-gray-300 hover:bg-gray-800'}`}>Heritage</button>

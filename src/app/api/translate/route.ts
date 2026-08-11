@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateRequest, translateRequestSchema, createAuditLog, logAudit } from '@/lib/validation';
 
+const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
+const DEEPL_ENDPOINT = DEEPL_API_KEY?.endsWith(':fx')
+  ? 'https://api-free.deepl.com/v2/translate'
+  : 'https://api.deepl.com/v2/translate';
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   let userId: string | undefined;
 
   try {
-    // Verify internal API secret
+    // Verify internal API secret (Required since this is an Admin-only route)
     const authHeader = req.headers.get('x-internal-secret');
     if (process.env.INTERNAL_API_SECRET && authHeader !== process.env.INTERNAL_API_SECRET) {
       const auditLog = createAuditLog(req, undefined, undefined, 'translate', undefined, 'translation', false, 'Invalid internal API secret');
@@ -29,34 +34,38 @@ export async function POST(req: NextRequest) {
 
     const { text, targetLang } = validation.data;
 
-    // MyMemory API (free tier)
-    const sourceLang = targetLang === 'en' ? 'de' : 'en';
-    const langPair = `${sourceLang}|${targetLang}`;
+    if (!DEEPL_API_KEY) {
+      return NextResponse.json({ error: 'Translation service not configured' }, { status: 503 });
+    }
 
-    const response = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`,
-      {
+    // Map the requested lang to DeepL's expected format (e.g. EN -> EN-US)
+    const deeplTargetLang = targetLang.toUpperCase() === 'EN' ? 'EN-US' : targetLang.toUpperCase();
+
+    // Use DeepL API instead of MyMemory for much higher quality admin translations
+    const response = await fetch(DEEPL_ENDPOINT, {
+        method: 'POST',
         headers: {
-          'User-Agent': 'ReboSalon/1.0',
+          'Authorization': `DeepL-Auth-Key ${DEEPL_API_KEY}`,
+          'Content-Type': 'application/json',
         },
-        // Timeout after 10 seconds
+        body: JSON.stringify({ text: [text], target_lang: deeplTargetLang, source_lang: 'DE' }),
         signal: AbortSignal.timeout(10000),
-      }
-    );
+    });
 
     if (!response.ok) {
-      const auditLog = createAuditLog(req, userId, undefined, 'translate', undefined, 'translation', false, `MyMemory API error: ${response.status}`);
+      const errText = await response.text();
+      console.error("DeepL Admin Translation Error:", errText);
+      const auditLog = createAuditLog(req, userId, undefined, 'translate', undefined, 'translation', false, `DeepL API error: ${response.status}`);
       logAudit(auditLog);
       return NextResponse.json({ error: 'Translation service unavailable' }, { status: 502 });
     }
 
     const data = await response.json();
-
-    const translatedText = data.responseData?.translatedText || text;
+    const translatedText = data.translations[0]?.text || text;
 
     const auditLog = createAuditLog(req, userId, undefined, 'translate', undefined, 'translation', true, undefined, {
-      sourceLang,
-      targetLang,
+      sourceLang: 'DE',
+      targetLang: deeplTargetLang,
       textLength: text.length,
       durationMs: Date.now() - startTime,
     });
@@ -64,6 +73,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, translatedText }, { status: 200 });
   } catch (error: any) {
+    console.error("Translate API Error:", error);
     const auditLog = createAuditLog(req, userId, undefined, 'translate', undefined, 'translation', false, error.message || 'Failed to translate', {
       durationMs: Date.now() - startTime,
     });

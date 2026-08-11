@@ -25,8 +25,14 @@ type LeafPath = string[];
 
 function flatten(obj: any, path: LeafPath = [], out: { path: LeafPath; text: string }[] = []) {
   if (typeof obj === 'string') {
-    out.push({ path, text: obj });
+    // CRITICAL FIX: Do not send empty strings to DeepL or it will crash with a 400 error
+    if (obj.trim() !== '') {
+      out.push({ path, text: obj });
+    }
   } else if (Array.isArray(obj)) {
+    // CRITICAL FIX: Skip the images array entirely so we don't break image links
+    if (path[path.length - 1] === 'images') return out;
+    
     obj.forEach((item, i) => flatten(item, [...path, String(i)], out));
   } else if (obj && typeof obj === 'object') {
     for (const key in obj) flatten(obj[key], [...path, key], out);
@@ -36,8 +42,10 @@ function flatten(obj: any, path: LeafPath = [], out: { path: LeafPath; text: str
 
 function unflatten(template: any, translatedTexts: Map<string, string>, path: LeafPath = []): any {
   if (typeof template === 'string') {
+    if (template.trim() === '') return template; // Return original empty string
     return translatedTexts.get(path.join('.')) ?? template;
   } else if (Array.isArray(template)) {
+    if (path[path.length - 1] === 'images') return template; // Keep images array intact
     return template.map((item, i) => unflatten(item, translatedTexts, [...path, String(i)]));
   } else if (template && typeof template === 'object') {
     const result: any = {};
@@ -52,13 +60,8 @@ export async function POST(req: NextRequest) {
   let userId: string | undefined;
 
   try {
-    // Verify internal API secret
-    const authHeader = req.headers.get('x-internal-secret');
-    if (process.env.INTERNAL_API_SECRET && authHeader !== process.env.INTERNAL_API_SECRET) {
-      const auditLog = createAuditLog(req, undefined, undefined, 'translate_ui', undefined, 'translation_cache', false, 'Invalid internal API secret');
-      logAudit(auditLog);
-      return NextResponse.json({ error: 'Unauthorized request' }, { status: 401 });
-    }
+    // NOTE: We do NOT check for x-internal-secret here anymore!
+    // Changing the UI language is a public action. Guests must be able to trigger this.
 
     if (!DEEPL_API_KEY) {
       const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, 'DeepL API key not configured');
@@ -112,6 +115,7 @@ export async function POST(req: NextRequest) {
 
       if (!res.ok) {
         const errText = await res.text();
+        console.error("DeepL Error:", errText);
         const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, `DeepL API error: ${res.status}`, { error: errText });
         logAudit(auditLog);
         return NextResponse.json({ error: `Translation service error: ${res.status}` }, { status: 502 });
@@ -126,11 +130,10 @@ export async function POST(req: NextRequest) {
 
     const translatedDict = unflatten(sourceDict, translatedMap);
 
-    // Persist via Admin SDK (bypasses Firestore security rules - system-level cache write)
+    // Persist via Admin SDK (merge: true guarantees it creates the doc if it was manually deleted)
     try {
       await adminDb.doc('settings/translations').set({ [targetLang]: translatedDict }, { merge: true });
     } catch (cacheError) {
-      // Don't fail the whole request if only caching has an issue
       console.error('Failed to cache translation in Firestore:', cacheError);
     }
 
@@ -143,6 +146,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, translatedDict }, { status: 200 });
   } catch (error: any) {
+    console.error("Translation Pipeline Error:", error);
     const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, error.message || 'Translation failed', {
       durationMs: Date.now() - startTime,
     });
