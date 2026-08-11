@@ -10,35 +10,7 @@ import { DeleteAccountButton, AccountDeletionModal } from '@/components/AccountD
 import { ProfileView } from '@/components/ProfileView';
 import { Navbar } from '@/components/Navbar';
 import { getInternalHeaders } from '@/lib/validation';
-import { AppProvider, useApp } from '@/context/AppContext';
-
-// --- TYPES & DATA MODELS ---
-type Theme = 'modern' | 'heritage';
-type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
-
-export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string; hasUpdatedPassword?: boolean };
-export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string; durationMins: number };
-export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
-export type Notification = { id: number; message: string; type: 'success' | 'info' | 'error' };
-export type TimeSlot = { id: string; time: string; isBooked: boolean };
-export type TranslationData = { [key: string]: { [key: string]: any } };
-export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
-
-export type Appointment = { 
-  id: string; userId: string; name: string; phone: string; 
-  services: string[]; totalDurationMins: number; stylist: string; 
-  date: string; time: string; 
-  status: 'pending' | 'confirmed' | 'cancelled' | 'proposed'; 
-  proposedDate?: string; proposedTime?: string;
-  sendsms: boolean; usedReward: boolean; notes?: string; isEmergency?: boolean;
-  referenceImage?: string; 
-};
-
-const initialSlots: TimeSlot[] = [
-  { id: 't1', time: '09:00', isBooked: false }, { id: 't2', time: '10:00', isBooked: false },
-  { id: 't3', time: '11:00', isBooked: false }, { id: 't4', time: '13:00', isBooked: false },
-  { id: 't5', time: '14:00', isBooked: false }, { id: 't6', time: '15:30', isBooked: false },
-];
+import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot } from '@/context/AppContext';
 
 const countryCodes = [
   { code: '+49', label: 'Deutschland 🇩🇪' }, { code: '+43', label: 'Österreich 🇦🇹' }, { code: '+41', label: 'Schweiz 🇨🇭' },
@@ -47,49 +19,22 @@ const countryCodes = [
   { code: '+32', label: 'Belgien 🇧🇪' }, { code: '+48', label: 'Polen 🇵🇱' }, { code: '+46', label: 'Schweden 🇸🇪' },
 ];
 
-// COMPLETE GERMAN DICTIONARY WITH DYNAMIC KEYS FOR ALL NEW FEATURES
-const fallbackTranslations: TranslationData = {
-  de: { 
-    nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Mein Profil" }, 
-    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, 
-    about: { title: "Über Uns", text: "Willkommen im Rebo Salon. Dein Look, unsere Leidenschaft." }, 
-    services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
-    gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, 
-    products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
-    contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
-    auth: { 
-      loginTitle: "Anmelden", loginSub: "Melden Sie sich an, um einen Termin zu buchen.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?",
-      passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark",
-      ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen"
-    }, 
-    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihre Leistungen & Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistungen (Mehrfachauswahl möglich)", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet." }, 
-    profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern" },
-    notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
-    security: {
-      title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden"
-    }
-  }
-};
+const initialSlots: TimeSlot[] = [
+  { id: 't1', time: '09:00', isBooked: false }, { id: 't2', time: '10:00', isBooked: false },
+  { id: 't3', time: '11:00', isBooked: false }, { id: 't4', time: '13:00', isBooked: false },
+  { id: 't5', time: '14:00', isBooked: false }, { id: 't6', time: '15:30', isBooked: false },
+]; 
 
-// --- LANGUAGE SELECTOR WIDGET ---
 function LanguageSelector() {
   const { lang, changeLanguage, isTranslatingUI, theme } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   
   const languages = [
-    { code: 'de', name: 'Deutsch' },
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Español' },
-    { code: 'fr', name: 'Français' },
-    { code: 'it', name: 'Italiano' },
-    { code: 'nl', name: 'Nederlands' },
-    { code: 'tr', name: 'Türkçe' },
-    { code: 'pl', name: 'Polski' },
-    { code: 'ru', name: 'Русский' },
-    { code: 'ar', name: 'العربية' },
-    { code: 'zh', name: '中文' },
-    { code: 'ja', name: '日本語' }
+    { code: 'de', name: 'Deutsch' }, { code: 'en', name: 'English' }, { code: 'es', name: 'Español' },
+    { code: 'fr', name: 'Français' }, { code: 'it', name: 'Italiano' }, { code: 'nl', name: 'Nederlands' },
+    { code: 'tr', name: 'Türkçe' }, { code: 'pl', name: 'Polski' }, { code: 'ru', name: 'Русский' },
+    { code: 'ar', name: 'العربية' }, { code: 'zh', name: '中文' }, { code: 'ja', name: '日本語' }
   ];
 
   const filteredLangs = languages.filter(l => l.name.toLowerCase().includes(search.toLowerCase()) || l.code.toLowerCase().includes(search.toLowerCase()));
@@ -157,14 +102,15 @@ function NotificationBell() {
     <div className="relative group mx-2">
       <button onClick={() => setIsOpen(!isOpen)} className={`relative p-2 rounded-full border transition-colors ${isHeritage ? 'border-[#c5a059]/30 text-[#c5a059] hover:bg-[#c5a059] hover:text-[#1a1814]' : 'border-white/10 text-[#d4af37] hover:bg-[#d4af37] hover:text-black'}`}>
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-        {unreadCount > 0 && <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border border-black text-[8px] flex items-center justify-center text-white font-bold animate-pulse">{unreadCount}</span>}
+        {/* Number Badge overlayed on bell */}
+        {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border border-black flex items-center justify-center text-white text-[10px] font-bold shadow-lg animate-pulse">{unreadCount}</span>}
       </button>
       
       {isOpen && (
         <div className={`absolute right-0 mt-2 w-72 border rounded-sm shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/30' : 'bg-[#111] border-white/10'}`}>
-          <h4 className="text-[10px] uppercase font-bold text-gray-500 mb-2 px-2 tracking-widest">{notifTrans.title}</h4>
+          <h4 className="text-[10px] uppercase font-bold text-gray-500 mb-2 px-2 tracking-widest">{notifTrans?.title || 'Benachrichtigungen'}</h4>
           <div className="max-h-64 overflow-y-auto custom-scrollbar">
-            {userAlerts.length === 0 ? <p className="text-xs text-gray-500 px-2 italic pb-2">{notifTrans.empty}</p> : 
+            {userAlerts.length === 0 ? <p className="text-xs text-gray-500 px-2 italic pb-2">{notifTrans?.empty || 'Keine'}</p> : 
               userAlerts.map(a => (
                 <div key={a.id} onClick={() => { markAlertRead(a.id); setPage(a.link); setIsOpen(false); }} className={`p-3 border-b border-gray-800 cursor-pointer transition-colors rounded-sm ${!a.isRead ? 'bg-white/5' : 'hover:bg-white/5'}`}>
                   <p className={`text-xs ${!a.isRead ? 'text-white font-bold' : 'text-gray-400'}`}>{a.message}</p>
@@ -173,15 +119,14 @@ function NotificationBell() {
               ))
             }
           </div>
-          {userAlerts.length > 0 && <button onClick={() => { clearAlerts(); setIsOpen(false); }} className="w-full text-center text-[10px] text-red-400 hover:text-red-300 uppercase tracking-widest mt-2 pt-2 border-t border-gray-800">{notifTrans.clearAll}</button>}
+          {userAlerts.length > 0 && <button onClick={() => { clearAlerts(); setIsOpen(false); }} className="w-full text-center text-[10px] text-red-400 hover:text-red-300 uppercase tracking-widest mt-2 pt-2 border-t border-gray-800">{notifTrans?.clearAll || 'Alle löschen'}</button>}
         </div>
       )}
     </div>
   );
 }
 
-// --- NAVBAR ---
-// --- NAVBAR ---
+// --- TOAST CONTAINER ---
 function ToastContainer() {
   const { notifications } = useApp();
   return (
@@ -209,7 +154,6 @@ function AuthView() {
 
   const authTrans = t.auth || fallbackTranslations.de.auth;
 
-  // Password Rules Calculation
   const hasLength = pass.length >= 8;
   const hasUpper = /[A-Z]/.test(pass);
   const hasLower = /[a-z]/.test(pass);
@@ -227,10 +171,7 @@ function AuthView() {
       if (isLogin) {
         await loginEmail(email, pass);
       } else {
-        if (!hasLength) {
-          setInlineAuthError("Das Passwort muss mindestens 8 Zeichen lang sein.");
-          return;
-        }
+        if (!hasLength) { setInlineAuthError("Das Passwort muss mindestens 8 Zeichen lang sein."); return; }
         if (!phoneInput || !name) { setInlineAuthError("Bitte füllen Sie alle Daten aus."); return; }
         const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
         await registerEmail(email, pass, name, fullPhone);
@@ -334,7 +275,7 @@ function AuthView() {
 
 // --- USER PROFILE & CRM VIEW ---
 function ProfileViewLocal() {
-  const { t, theme, currentUser, appointments, addNotification, updateUserPassword } = useApp();
+  const { t, theme, currentUser, appointments, addNotification, updateUserPassword, updateAppointmentStatus } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   
   const [editName, setEditName] = useState('');
@@ -357,7 +298,6 @@ function ProfileViewLocal() {
   const secTrans = t.security || fallbackTranslations.de.security;
   const authTrans = t.auth || fallbackTranslations.de.auth;
 
-  // Force Password Update Check
   const isEmailProvider = auth.currentUser?.providerData.some(p => p.providerId === 'password');
   const [showForcePasswordModal, setShowForcePasswordModal] = useState(false);
 
@@ -433,7 +373,6 @@ function ProfileViewLocal() {
     }
   };
 
-  // Password Rules Calculation
   const hasLength = newPass.length >= 8;
   const hasUpper = /[A-Z]/.test(newPass);
   const hasLower = /[a-z]/.test(newPass);
@@ -451,7 +390,6 @@ function ProfileViewLocal() {
   return (
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
-      {/* FORCE PASSWORD CHANGE MODAL FOR OLD USERS */}
       {showForcePasswordModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
@@ -611,7 +549,19 @@ function ProfileViewLocal() {
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
                       <p className="font-bold text-base">{sList}</p>
                       <p className="text-xs text-gray-400 mb-3">{a.date} um {a.time} bei {a.stylist} ({a.totalDurationMins || 60} Min)</p>
-                      <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{a.status === 'pending' ? 'Ausstehend' : 'Vorgeschlagen'}</span>
+                      
+                      {a.status === 'proposed' ? (
+                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-sm">
+                          <p className="text-blue-400 text-xs font-bold mb-2">⚠️ Neuer Terminvorschlag vom Salon:</p>
+                          <p className="text-white text-sm mb-3">{a.proposedDate} um {a.proposedTime} Uhr</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', true, undefined, a.proposedDate, a.proposedTime)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold uppercase rounded-sm">Zeit Akzeptieren</button>
+                            <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 hover:bg-red-500/10 px-3 py-1.5 text-xs font-bold uppercase rounded-sm">Stornieren</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">Ausstehend</span>
+                      )}
                     </div>
                   );
                 })}
@@ -647,6 +597,9 @@ function AdminView() {
   const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, theme } = useApp();
   const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
+  
+  // Reschedule State for Admin
+  const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
   
   const [calDate, setCalDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -750,7 +703,7 @@ function AdminView() {
            </div>
 
            <div className="space-y-4">
-             {initialSlots.map(slot => {
+             {initialSlots.map((slot: TimeSlot) => {
                 const apptsInSlot = appointments.filter((a: Appointment) => a.date === calDate && a.time === slot.time && a.status !== 'cancelled');
                 return (
                   <div key={slot.id} className="flex gap-4 p-4 border border-white/10 rounded-sm bg-black/40">
@@ -807,6 +760,15 @@ function AdminView() {
                         <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-600 text-red-400 px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-red-900/30">Ablehnen</button>
                       </div>
                     </div>
+                    {/* Admin Reschedule block for Pending */}
+                    <div className="mt-4 pt-4 border-t border-red-500/20">
+                      <p className="text-[10px] uppercase text-gray-500 mb-2">Termin verschieben (Neuer Vorschlag)</p>
+                      <div className="flex gap-2">
+                        <input type="date" onChange={(e) => setRescheduleData({...rescheduleData, [a.id]: {...rescheduleData[a.id], date: e.target.value}})} className="bg-black border border-white/20 p-2 text-xs rounded-sm text-white flex-1" />
+                        <input type="time" onChange={(e) => setRescheduleData({...rescheduleData, [a.id]: {...rescheduleData[a.id], time: e.target.value}})} className="bg-black border border-white/20 p-2 text-xs rounded-sm text-white flex-1" />
+                        <button onClick={() => updateAppointmentStatus(a.id, 'proposed', true, undefined, rescheduleData[a.id]?.date, rescheduleData[a.id]?.time)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold uppercase rounded-sm hover:bg-blue-500">Vorschlagen</button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -832,9 +794,22 @@ function AdminView() {
                      </div>
                      
                      {a.status === 'confirmed' && (
-                      <div className="mt-4 pt-4 border-t border-gray-800 flex gap-3">
-                        <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder="Interne Notizen (z.B. Skin fade #1...)" className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
-                        <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Notiz speichern</button>
+                      <div className="mt-4 pt-4 border-t border-gray-800 space-y-4">
+                        <div className="flex gap-3">
+                          <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder="Interne Notizen (z.B. Skin fade #1...)" className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
+                          <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className={`px-6 py-3 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Notiz speichern</button>
+                          
+                          {/* OVERRIDE CANCELLATION FOR CONFIRMED APPTS */}
+                          <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-red-600/20 text-red-400 border border-red-600 hover:bg-red-600 hover:text-white transition-colors">Stornieren</button>
+                        </div>
+                        
+                        {/* OVERRIDE RESCHEDULE FOR CONFIRMED APPTS */}
+                        <div className="flex gap-2 items-center bg-white/5 p-3 rounded-sm border border-white/10">
+                          <span className="text-xs uppercase text-gray-400 font-bold">Verschieben:</span>
+                          <input type="date" onChange={(e) => setRescheduleData({...rescheduleData, [a.id]: {...rescheduleData[a.id], date: e.target.value}})} className="bg-black border border-white/20 p-2 text-xs rounded-sm text-white flex-1" />
+                          <input type="time" onChange={(e) => setRescheduleData({...rescheduleData, [a.id]: {...rescheduleData[a.id], time: e.target.value}})} className="bg-black border border-white/20 p-2 text-xs rounded-sm text-white flex-1" />
+                          <button onClick={() => updateAppointmentStatus(a.id, 'proposed', true, undefined, rescheduleData[a.id]?.date, rescheduleData[a.id]?.time)} className="bg-blue-600 text-white px-4 py-2 text-xs font-bold uppercase rounded-sm hover:bg-blue-500">Kunden Vorschlagen</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -960,8 +935,6 @@ function BookingView() {
   const [refImageFile, setRefImageFile] = useState<File | null>(null);
   const [refImagePreview, setRefImagePreview] = useState<string | null>(null);
   
-  
-
   const isHeritage = theme === 'heritage';
   const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMins || 60), 0);
   const openSlots = getAvailableSlots(bookingDate, totalDuration);
@@ -983,14 +956,10 @@ function BookingView() {
     else setSelectedServices([...selectedServices, srv]);
   };
 
-  
-  
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
     if (!allowedTypes.includes(file.type)) {
       addNotification('Nur JPEG, PNG, WEBP, HEIC/HEIF Dateien erlaubt', 'error');
@@ -1002,12 +971,8 @@ function BookingView() {
     }
     
     setRefImageFile(file);
-    
-    // Create preview
     const reader = new FileReader();
-    reader.onload = (event) => {
-      setRefImagePreview(event.target?.result as string);
-    };
+    reader.onload = (event) => { setRefImagePreview(event.target?.result as string); };
     reader.readAsDataURL(file);
   };
 
@@ -1025,7 +990,6 @@ function BookingView() {
       await updateDoc(doc(db, 'users', currentUser.id), { phone: fullPhone, name: bookingName });
     }
 
-    // Create appointment first
     const appointmentRef = await addAppointmentTyped({
       userId: currentUser.id,
       name: bookingName, phone: fullPhone,
@@ -1039,7 +1003,6 @@ function BookingView() {
       referenceImage: ''
     });
 
-    // Upload reference image if provided
     if (refImageFile && appointmentRef?.id) {
       try {
         const downloadURL = await uploadReferenceImage(currentUser.id, appointmentRef.id, refImageFile);
@@ -1100,7 +1063,7 @@ function BookingView() {
               <div>
                  <label className="block text-xs uppercase text-gray-400 mb-3">{t.booking.service}</label>
                  <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 border border-white/10 p-3 bg-black/50 rounded-sm custom-scrollbar">
-                   {servicesDB.map(s => {
+                   {servicesDB.map((s: ServiceItem) => {
                      const isSelected = selectedServices.find(x => x.id === s.id);
                      return (
                         <div key={s.id} onClick={() => handleToggleService(s)} className={`cursor-pointer border p-3 flex justify-between items-center rounded-sm transition-colors ${isSelected ? (isHeritage ? 'border-[#c5a059] bg-[#c5a059]/10' : 'border-[#d4af37] bg-[#d4af37]/10') : 'border-white/10 hover:border-white/30'}`}>
@@ -1123,7 +1086,7 @@ function BookingView() {
                     {t.booking.stylistOptions.map((opt: string, i: number) => <option key={i} value={opt}>{opt}</option>)}
                   </select>
                 </div>
-<div>
+                <div>
                     <label className="block text-xs uppercase text-gray-400 mb-2">Referenzbild (Optional)</label>
                     {refImagePreview ? (
                       <div className="relative group">
@@ -1132,17 +1095,9 @@ function BookingView() {
                           type="button"
                           onClick={clearImageUpload}
                           className="absolute top-2 right-2 p-1 bg-red-500/80 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Bild entfernen"
                         >
                           ✕
                         </button>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="w-full text-xs text-gray-400 file:mr-4 file:py-3 file:px-4 file:rounded-sm file:border-0 file:bg-white/10 file:text-white bg-black border border-white/20 p-1 rounded-sm"
-                          style={{ display: 'none' }}
-                        />
                       </div>
                     ) : (
                       <input
@@ -1162,7 +1117,7 @@ function BookingView() {
                   
                   {bookingDate ? (
                     <div className="grid grid-cols-3 gap-2 flex-1">
-                      {openSlots.map(slot => (
+                      {openSlots.map((slot: TimeSlot) => (
                         <button key={slot.id} type="button" disabled={slot.isBooked} onClick={() => setSelectedSlot(slot.id)}
                           className={`py-3 rounded-sm border text-xs font-bold transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed' : selectedSlot === slot.id ? (isHeritage ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'bg-[#d4af37] text-black border-[#d4af37]') : 'border-white/20 text-gray-300 hover:bg-white/5'}`}
                         >
@@ -1252,12 +1207,23 @@ function ContactView() {
 
 // --- MAIN WRAPPER ---
 function MainContent() {
-  const { theme, setTheme, page, setPage, t, servicesDB, productsDB } = useApp();
+  const { theme, setTheme, page, setPage, t, servicesDB, productsDB, currentUser } = useApp();
   const isHeritage = theme === 'heritage';
 
   return (
     <div className={`relative min-h-screen flex flex-col ${isHeritage ? 'bg-[#1a1814] text-[#e8e6e3]' : 'bg-[#0a0a0a] text-white'}`}>
       <ToastContainer />
+      
+      {/* Top Navbar Actions */}
+      <div className="fixed top-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+         <div className="pointer-events-auto flex items-center">
+            <LanguageSelector />
+         </div>
+         <div className="pointer-events-auto flex items-center">
+            {currentUser && <NotificationBell />}
+         </div>
+      </div>
+      
       <Navbar />
 
       <main className="grow">
@@ -1284,7 +1250,7 @@ function MainContent() {
                 <section className="relative min-h-[75vh] md:min-h-[85vh] flex items-center justify-center pt-28 px-4 overflow-hidden">
                   <div className="absolute inset-0 z-0">
                     <div className="absolute inset-0 bg-[#0a0a0a]/70 z-10" />
-                    <div className="absolute inset-0 bg-linear-to-t from-[#0a0a0a] via-transparent to-transparent z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent z-10" />
                     <img src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=1600&q=80" className="w-full h-full object-cover grayscale-30" alt="Salon Background" />
                   </div>
                   <div className="relative z-20 text-center max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
@@ -1342,7 +1308,7 @@ function MainContent() {
             <div className={`text-center mb-12 pb-8 ${isHeritage ? 'border-b border-[#c5a059]/20' : ''}`}>
                <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'text-[#c5a059] font-serif-custom' : 'uppercase tracking-tight'}`}>{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-75 md:auto-rows-75">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[75px] md:auto-rows-[150px]">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -1369,7 +1335,7 @@ function MainContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
                 <div key={item.id} className={`rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both ${isHeritage ? 'bg-[#141310] border border-[#c5a059]/30' : 'bg-[#111] border border-white/10'}`} style={{ animationDelay: `${idx * 150}ms` }}>
-                  <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
+                  <div className="w-full aspect-square md:aspect-[4/5] overflow-hidden bg-black/50 relative group">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
                   <div className="p-6 md:p-8 flex flex-col grow relative">
@@ -1386,7 +1352,6 @@ function MainContent() {
         )}
       </main>
 
-      {/* Footer */}
       {page !== 'admin' && page !== 'booking' && page !== 'contact' && page !== 'auth' && page !== 'profile' && (
         <footer className={`w-full py-6 text-center text-xs tracking-wider border-t ${isHeritage ? 'border-[#c5a059]/10 text-gray-600' : 'border-white/5 text-gray-500'}`}>
           <p>

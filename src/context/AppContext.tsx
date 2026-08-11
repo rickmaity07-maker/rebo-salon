@@ -4,10 +4,6 @@ import { auth, db, getGoogleProvider, getFacebookProvider } from '../lib/firebas
 import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc, DocumentReference } from 'firebase/firestore';
 
-// NOTE: broadened from 'de' | 'en' to a general string so changeLanguage can
-// support any of the extra languages (es, fr, it, nl, tr, pl, ru, ar, zh, ja...).
-// Every place that previously used 'de'/'en' literals still works fine, since
-// those are still valid strings.
 type Language = string;
 type Theme = 'modern' | 'heritage';
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
@@ -25,7 +21,6 @@ export type Appointment = {
 };
 
 export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
-
 export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string; durationMins: number };
 export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
 export type Notification = { id: number; message: string; type: 'success' | 'info' | 'error' };
@@ -88,7 +83,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
   
-  // Secure Firebase ID Token Header Generation
   const getAuthHeaders = async () => {
     const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
     return {
@@ -162,7 +156,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // User is logged in -> Load private data safely
         unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
           if (docSnap.exists()) {
             const profile = docSnap.data() as UserProfile;
@@ -184,7 +177,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Alert)));
         });
       } else {
-        // User is logged out -> Clear private data & listeners immediately
         setCurrentUser(null);
         setIsAdminAuth(false);
         setAppointments([]);
@@ -195,7 +187,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Public data -> Safe to load immediately for everyone (Guests & Logged In)
     const unsubTrans = onSnapshot(doc(db, 'settings', 'translations'), (snap) => {
       if (snap.exists()) setTranslations({ ...fallbackTranslations, ...(snap.data() as TranslationData) });
     });
@@ -206,7 +197,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setProductsDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProductItem)));
     });
 
-    // Cleanup memory on unmount
     return () => { 
       unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); 
       if (unsubAppts) unsubAppts(); 
@@ -215,7 +205,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // --- AI-ASSISTED UI TRANSLATION (DeepL, cached server-side via Admin SDK) ---
   const changeLanguage = async (newLang: string) => {
     if (newLang === lang) return;
     if (newLang === 'de' || translations[newLang]) {
@@ -232,9 +221,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (data.translatedDict) {
-        // Applied locally right away; the server already persisted this to
-        // Firestore via the Admin SDK, so future visitors get it from the
-        // onSnapshot listener above without needing a fresh DeepL call.
         setTranslations(prev => ({ ...prev, [newLang]: data.translatedDict }));
         setLang(newLang);
         addNotification(`Interface in neuer Sprache geladen!`, 'success');
@@ -250,20 +236,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getAvailableSlots = (date: string) => {
+  // --- OVERBOOKING LOGIC (Duration Based overlap prevention) ---
+  const timeToMins = (t: string) => { 
+    const [h, m] = t.split(':').map(Number); 
+    return h * 60 + m; 
+  };
+
+  const getAvailableSlots = (date: string, requiredDuration: number = 60) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
     
-    const bookedTimes = appointments.reduce((acc: string[], a) => {
-      if ((a.status === 'confirmed' || a.status === 'pending') && a.date === date) {
-        acc.push(a.time);
-      }
-      if (a.status === 'proposed' && a.proposedDate === date && a.proposedTime) {
-        acc.push(a.proposedTime);
-      }
-      return acc;
-    }, []);
-
-    return initialSlots.map(s => ({ ...s, isBooked: bookedTimes.includes(s.time) }));
+    return initialSlots.map(slot => {
+      const slotMins = timeToMins(slot.time);
+      const isOverlapping = appointments.some(a => {
+        if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
+        
+        const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
+        const aEnd = aStart + (a.totalDurationMins || 60);
+        
+        const newStart = slotMins;
+        const newEnd = slotMins + requiredDuration;
+        
+        // Prevent booking if any existing appointment overlaps the required duration
+        return newStart < aEnd && newEnd > aStart;
+      });
+      return { ...slot, isBooked: isOverlapping };
+    });
   };
 
   const loginOAuth = async (providerName: 'Google' | 'Facebook') => {
@@ -273,10 +270,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPageRouter('profile');
       addNotification(`Logged in with ${providerName}`, 'success');
     } catch (error: any) { 
-      // Silently ignore if the user simply closed the popup window
-      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        return; 
-      }
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') return; 
       addNotification(error.message, 'error'); 
     }
   };
@@ -304,16 +298,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    if (!email) {
-      addNotification("Please enter your email address first.", 'error');
-      return;
-    }
+    if (!email) return addNotification("Please enter your email address first.", 'error');
     try {
       await sendPasswordResetEmail(auth, email);
       addNotification("Password reset email sent! Check your inbox.", 'success');
-    } catch (error: any) { 
-      addNotification(error.message, 'error'); 
-    }
+    } catch (error: any) { addNotification(error.message, 'error'); }
   };
 
   const logout = () => { signOut(auth); setPageRouter('home'); };
@@ -333,117 +322,115 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addNotification("Translation saved via Cloud!", 'success');
   };
 
+  const sendDualEmail = async (uEmail: string | null, uSubj: string, uMsg: string, aSubj: string, aMsg: string) => {
+    try {
+      const headers = await getAuthHeaders();
+      if (uEmail) {
+        fetch('/api/email', { method: 'POST', headers, body: JSON.stringify({ email: uEmail, subject: uSubj, message: uMsg }) }).catch(()=>{});
+      }
+      fetch('/api/email', { method: 'POST', headers, body: JSON.stringify({ email: adminEmail, subject: aSubj, message: aMsg }) }).catch(()=>{});
+    } catch (e) {
+      console.error("Dual Email Execution Failed", e);
+    }
+  };
+
   const addAppointment = async (appt: Omit<Appointment, 'id'>): Promise<DocumentReference | undefined> => {
     if (!currentUser) return;
     
     const docRef = await addDoc(collection(db, 'appointments'), appt);
-    
     const userRef = doc(db, 'users', currentUser.id);
-    if (appt.usedReward) {
-      await updateDoc(userRef, { haircutCount: Math.max(0, currentUser.haircutCount - 10) });
-    } else {
-      await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
-    }
     
-    try {
-      await fetch('/api/email', {
-        method: 'POST',
-        headers: await getAuthHeaders(),
-        body: JSON.stringify({
-          email: currentUser.email,
-          subject: "Rebo Salon: Buchungsanfrage erhalten",
-          message: `Hallo ${appt.name},\n\nDeine Anfrage für ${appt.services.join(', ')} am ${appt.date} um ${appt.time} Uhr wurde an den Salon übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit und werden deinen Termin in Kürze bestätigen.\n\nDein Rebo Salon Team`
-        })
-      });
-    } catch (e) {
-      console.error("User request confirmation email failed");
-    }
-
-    try {
-      await fetch('/api/email', { 
-        method: 'POST', 
-        headers: await getAuthHeaders(), 
-        body: JSON.stringify({ 
-          email: adminEmail, 
-          subject: "🚨 Neuer Termin eingegangen!",
-          message: `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${appt.services.join(', ')} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen, abzulehnen oder zu verschieben.` 
-        }) 
-      });
-    } catch (e) {
-      console.error("Admin Notification Email Failed");
-    }
+    if (appt.usedReward) await updateDoc(userRef, { haircutCount: Math.max(0, currentUser.haircutCount - 10) });
+    else await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
+    
+    await sendDualEmail(
+      currentUser.email,
+      "Rebo Salon: Buchungsanfrage erhalten",
+      `Hallo ${appt.name},\n\nDeine Anfrage für ${appt.services.join(', ')} am ${appt.date} um ${appt.time} Uhr wurde an den Salon übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit und werden deinen Termin in Kürze bestätigen.\n\nDein Rebo Salon Team`,
+      "🚨 Neuer Termin eingegangen!",
+      `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${appt.services.join(', ')} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen, abzulehnen oder zu verschieben.`
+    );
 
     addNotification("Appointment request sent!", 'success');
-      
-      return docRef;
-    };
+    return docRef;
+  };
 
+  // --- ADMIN & USER STATUS UPDATING (With complete Email Coverage) ---
   const updateAppointmentStatus = async (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => {
     const appt = appointments.find(a => a.id === id);
     if (!appt) return;
 
     const updates: any = { status };
     if (notes !== undefined) updates.notes = notes;
-    if (proposedDate) updates.proposedDate = proposedDate;
-    if (proposedTime) updates.proposedTime = proposedTime;
+
+    // Handle user accepting a reschedule: overwrite main date with proposal
+    if (status === 'confirmed' && proposedDate && proposedTime) {
+      updates.date = proposedDate;
+      updates.time = proposedTime;
+      updates.proposedDate = null;
+      updates.proposedTime = null;
+    } else {
+      // Just saving a proposal
+      if (proposedDate) updates.proposedDate = proposedDate;
+      if (proposedTime) updates.proposedTime = proposedTime;
+    }
     
     await updateDoc(doc(db, 'appointments', id), updates);
 
+    // Reward adjustment if cancelled
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
         const uData = userDoc.data();
-        if (appt.usedReward) {
-          await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 }); 
-        } else {
-          await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) }); 
-        }
+        if (appt.usedReward) await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 }); 
+        else await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) }); 
       }
     }
 
     const userDoc = await getDoc(doc(db, 'users', appt.userId));
     const userEmail = userDoc.exists() ? userDoc.data().email : null;
+    
+    const finalDate = (status === 'confirmed' && proposedDate) ? proposedDate : (proposedDate || appt.date);
+    const finalTime = (status === 'confirmed' && proposedTime) ? proposedTime : (proposedTime || appt.time);
 
     if (status === 'confirmed' && appt.status !== 'confirmed') {
         if (sendsms && appt.phone) {
-          try {
-            const cleanPhone = appt.phone.replace(/\s+/g, '');
-            const smsText = `Rebo Salon: Dein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist bestätigt!`;
-            await fetch('/api/sms', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ phone: cleanPhone, message: smsText }) });
-          } catch (e) { console.error("SMS failed"); }
+          const cleanPhone = appt.phone.replace(/\s+/g, '');
+          fetch('/api/sms', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ phone: cleanPhone, message: `Rebo Salon: Dein Termin am ${finalDate} um ${finalTime} Uhr ist bestätigt!` }) }).catch(()=>{});
         }
         
-        if (userEmail) {
-          try {
-            const emailText = `Hallo ${appt.name},\n\nDein Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist} ist offiziell bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`;
-            await fetch('/api/email', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminbestätigung", message: emailText }) });
-            addNotification("Status aktualisiert & Bestätigungs-E-Mail gesendet!", 'success');
-          } catch (e) { addNotification("Status aktualisiert, aber E-Mail fehlgeschlagen.", 'error'); }
-        }
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Dein Termin am ${finalDate} um ${finalTime} Uhr wurde bestätigt!`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await sendDualEmail(
+          userEmail,
+          "Rebo Salon: Terminbestätigung",
+          `Hallo ${appt.name},\n\nDein Termin am ${finalDate} um ${finalTime} Uhr bei ${appt.stylist} ist offiziell bestätigt!\n\nWir freuen uns auf dich.\nRebo Salon`,
+          "Admin Info: Termin Bestätigt",
+          `Der Termin für ${appt.name} am ${finalDate} um ${finalTime} Uhr wurde erfolgreich bestätigt.`
+        );
+        addNotification("Status aktualisiert & Bestätigungs-E-Mails gesendet!", 'success');
         
     } else if (status === 'cancelled' && appt.status !== 'cancelled') {
-        if (userEmail) {
-          try {
-            const emailText = `Hallo ${appt.name},\n\nLeider mussten wir deine Termin Anfrage für den ${appt.date} um ${appt.time} Uhr absagen oder stornieren.\n\nBitte versuche einen anderen Termin auf unserer Webseite zu buchen.\n\nDein Rebo Salon Team`;
-            await fetch('/api/email', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminabsage", message: emailText }) });
-            addNotification("Termin abgelehnt & Absage-E-Mail gesendet!", 'info');
-          } catch (e) { console.error("Cancellation email failed"); }
-        }
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Dein Termin am ${appt.date} wurde leider storniert.`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await sendDualEmail(
+          userEmail,
+          "Rebo Salon: Terminabsage",
+          `Hallo ${appt.name},\n\nLeider mussten wir deine Terminanfrage für den ${appt.date} um ${appt.time} Uhr stornieren (z.B. aufgrund von Überbuchungen oder Überschneidungen).\n\nBitte buche einen neuen Termin auf unserer Webseite.\n\nDein Rebo Salon Team`,
+          "Admin Info: Termin Storniert",
+          `Der Termin für ${appt.name} am ${appt.date} um ${appt.time} Uhr wurde storniert.`
+        );
+        addNotification("Termin abgelehnt & Absage-E-Mail gesendet!", 'info');
 
     } else if (status === 'proposed' && appt.status !== 'proposed') {
-        if (userEmail) {
-          try {
-            const emailText = `Hallo ${appt.name},\n\nWir können deinen Termin am ${appt.date} um ${appt.time} leider nicht zur gewählten Zeit wahrnehmen.\n\nWir schlagen stattdessen vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte logge dich auf unserer Webseite in dein Profil ein, um diesen neuen Termin zu akzeptieren oder abzulehnen.\n\nDein Rebo Salon Team`;
-            
-            await fetch('/api/email', { 
-              method: 'POST', 
-              headers: await getAuthHeaders(), 
-              body: JSON.stringify({ email: userEmail, subject: "Rebo Salon: Terminvorschlag / Action Required", message: emailText }) 
-            });
-            addNotification("Neuer Termin vorgeschlagen & E-Mail an Kunden gesendet!", 'info');
-          } catch (e) { addNotification("Vorschlag gespeichert, aber E-Mail fehlgeschlagen.", 'error'); }
-        }
+        await addDoc(collection(db, 'alerts'), { userId: appt.userId, message: `Neuer Termin-Vorschlag: ${proposedDate} um ${proposedTime}. Bitte bestätigen!`, isRead: false, link: 'profile', createdAt: Date.now() });
+        await sendDualEmail(
+          userEmail,
+          "Rebo Salon: Terminvorschlag / Bitte bestätigen",
+          `Hallo ${appt.name},\n\nWir mussten deinen Termin am ${appt.date} um ${appt.time} leider verschieben.\n\nWir schlagen stattdessen vor:\nNeues Datum: ${proposedDate}\nNeue Uhrzeit: ${proposedTime}\n\nBitte logge dich auf unserer Webseite in dein Profil ein, um diesen neuen Termin zu akzeptieren oder abzulehnen.\n\nDein Rebo Salon Team`,
+          "Admin Info: Termin verschoben (Kunde muss bestätigen)",
+          `Du hast einen neuen Terminvorschlag an ${appt.name} gesendet. Neues Datum: ${proposedDate} um ${proposedTime} Uhr. Wartet auf Kundenbestätigung.`
+        );
+        addNotification("Neuer Termin vorgeschlagen & E-Mail an Kunden gesendet!", 'info');
         
     } else if (notes !== undefined) { 
       addNotification("Notizen gespeichert.", 'success'); 
