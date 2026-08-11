@@ -1,15 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '../../../lib/firebaseAdmin';
+import { validateRequest, translateUiRequestSchema, createAuditLog, logAudit } from '@/lib/validation';
 
 const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
-// Free-tier keys (ending in :fx) must use the api-free host; paid keys use api.deepl.com
 const DEEPL_ENDPOINT = DEEPL_API_KEY?.endsWith(':fx')
   ? 'https://api-free.deepl.com/v2/translate'
   : 'https://api.deepl.com/v2/translate';
 
-// DeepL uses its own language codes, which don't always match the simple
-// ISO codes used elsewhere in this app. Map from the app's codes to DeepL's.
-// 'hi' (Hindi) is intentionally omitted — DeepL does not support it yet.
 const LANG_CODE_MAP: Record<string, string> = {
   en: 'EN-US',
   es: 'ES',
@@ -26,9 +23,6 @@ const LANG_CODE_MAP: Record<string, string> = {
 
 type LeafPath = string[];
 
-// Flattens the nested translation dictionary into a flat list of strings
-// (with their paths) so every string can be translated in ONE batched DeepL
-// request instead of one network call per string.
 function flatten(obj: any, path: LeafPath = [], out: { path: LeafPath; text: string }[] = []) {
   if (typeof obj === 'string') {
     out.push({ path, text: obj });
@@ -40,8 +34,6 @@ function flatten(obj: any, path: LeafPath = [], out: { path: LeafPath; text: str
   return out;
 }
 
-// Reconstructs the nested structure from the flat list, using the original
-// object as a shape template so array-vs-object structure is preserved.
 function unflatten(template: any, translatedTexts: Map<string, string>, path: LeafPath = []): any {
   if (typeof template === 'string') {
     return translatedTexts.get(path.join('.')) ?? template;
@@ -55,25 +47,46 @@ function unflatten(template: any, translatedTexts: Map<string, string>, path: Le
   return template;
 }
 
-export async function POST(req: Request) {
-  const authHeader = req.headers.get('x-internal-secret');
-  if (process.env.NEXT_PUBLIC_INTERNAL_API_SECRET && authHeader !== process.env.NEXT_PUBLIC_INTERNAL_API_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized request' }, { status: 401 });
-  }
-
-  if (!DEEPL_API_KEY) {
-    console.error('DEEPL_API_KEY is not set in .env.local');
-    return NextResponse.json({ error: 'Translation service not configured' }, { status: 500 });
-  }
+export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  let userId: string | undefined;
 
   try {
-    const { targetLang, sourceDict } = await req.json();
-    if (!targetLang || !sourceDict) return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    // Verify internal API secret
+    const authHeader = req.headers.get('x-internal-secret');
+    if (process.env.INTERNAL_API_SECRET && authHeader !== process.env.INTERNAL_API_SECRET) {
+      const auditLog = createAuditLog(req, undefined, undefined, 'translate_ui', undefined, 'translation_cache', false, 'Invalid internal API secret');
+      logAudit(auditLog);
+      return NextResponse.json({ error: 'Unauthorized request' }, { status: 401 });
+    }
+
+    if (!DEEPL_API_KEY) {
+      const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, 'DeepL API key not configured');
+      logAudit(auditLog);
+      return NextResponse.json({ error: 'Translation service not configured' }, { status: 503 });
+    }
+
+    // Validate request body
+    const body = await req.json();
+    const validation = validateRequest(translateUiRequestSchema, body);
+
+    if (!validation.success) {
+      const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, 'Validation failed', { errors: validation.errors.flatten() });
+      logAudit(auditLog);
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.errors.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { targetLang, sourceDict } = validation.data;
 
     const deeplLang = LANG_CODE_MAP[targetLang];
     if (!deeplLang) {
+      const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, `Unsupported language: ${targetLang}`);
+      logAudit(auditLog);
       return NextResponse.json(
-        { error: `Sprache "${targetLang}" wird von DeepL derzeit nicht unterstützt.` },
+        { error: `Language "${targetLang}" is not supported by DeepL` },
         { status: 400 }
       );
     }
@@ -81,9 +94,10 @@ export async function POST(req: Request) {
     const leaves = flatten(sourceDict);
     const texts = leaves.map(l => l.text);
 
-    // DeepL accepts up to 50 texts per request on the free tier; chunk to be safe.
+    // DeepL accepts up to 50 texts per request on free tier; chunk to be safe
     const CHUNK_SIZE = 50;
     const translatedTexts: string[] = [];
+
     for (let i = 0; i < texts.length; i += CHUNK_SIZE) {
       const chunk = texts.slice(i, i + CHUNK_SIZE);
       const res = await fetch(DEEPL_ENDPOINT, {
@@ -93,12 +107,14 @@ export async function POST(req: Request) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ text: chunk, target_lang: deeplLang, source_lang: 'DE' }),
+        signal: AbortSignal.timeout(30000),
       });
 
       if (!res.ok) {
         const errText = await res.text();
-        console.error(`DeepL API error (${res.status}):`, errText);
-        return NextResponse.json({ error: `DeepL API error: ${res.status}` }, { status: 502 });
+        const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, `DeepL API error: ${res.status}`, { error: errText });
+        logAudit(auditLog);
+        return NextResponse.json({ error: `Translation service error: ${res.status}` }, { status: 502 });
       }
 
       const data = await res.json();
@@ -110,22 +126,31 @@ export async function POST(req: Request) {
 
     const translatedDict = unflatten(sourceDict, translatedMap);
 
-    // Persist via the Admin SDK, which bypasses Firestore security rules —
-    // this is a system-level cache write, not something a visiting browser
-    // should ever need admin rights to do.
+    // Persist via Admin SDK (bypasses Firestore security rules - system-level cache write)
     try {
       await adminDb.doc('settings/translations').set({ [targetLang]: translatedDict }, { merge: true });
     } catch (cacheError) {
-      // Don't fail the whole request if only the caching step has an issue —
-      // the person still gets their translation, it just won't persist for
-      // future visitors this time.
+      // Don't fail the whole request if only caching has an issue
       console.error('Failed to cache translation in Firestore:', cacheError);
     }
 
-    return NextResponse.json({ success: true, translatedDict }, { status: 200 });
+    const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', true, undefined, {
+      targetLang,
+      stringsTranslated: texts.length,
+      durationMs: Date.now() - startTime,
+    });
+    logAudit(auditLog);
 
+    return NextResponse.json({ success: true, translatedDict }, { status: 200 });
   } catch (error: any) {
-    console.error('UI Translation Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const auditLog = createAuditLog(req, userId, undefined, 'translate_ui', undefined, 'translation_cache', false, error.message || 'Translation failed', {
+      durationMs: Date.now() - startTime,
+    });
+    logAudit(auditLog);
+
+    return NextResponse.json(
+      { error: 'Translation failed' },
+      { status: 500 }
+    );
   }
 }

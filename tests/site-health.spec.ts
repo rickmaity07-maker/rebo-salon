@@ -65,7 +65,7 @@ test.describe('Site-wide health check (no login required)', () => {
 test.describe('Authenticated pages', () => {
   test.skip(
     !process.env.TEST_USER_EMAIL || !process.env.TEST_USER_PASSWORD,
-    'Set TEST_USER_EMAIL and TEST_USER_PASSWORD in .env.test to run this test'
+    'Set TEST_USER_EMAIL and TEST_USER_PASSWORD in environment variables to run this test'
   );
 
   test('no console errors or failed requests on booking/profile after login', async ({ page }) => {
@@ -77,8 +77,7 @@ test.describe('Authenticated pages', () => {
     await page.getByPlaceholder(/e-mail-adresse|email address/i).fill(process.env.TEST_USER_EMAIL!);
     await page.getByPlaceholder(/passwort|password/i).fill(process.env.TEST_USER_PASSWORD!);
     await page.getByRole('button', { name: /einloggen|sign in/i }).click();
-
-    await page.waitForURL(/#profile/, { timeout: 10000 });
+    await expect(page.getByText(/mein profil|my profile/i)).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(2000);
 
     await page.goto('/#booking');
@@ -92,7 +91,7 @@ test.describe('Authenticated pages', () => {
 test.describe('Admin panel', () => {
   test.skip(
     !process.env.TEST_ADMIN_EMAIL || !process.env.TEST_ADMIN_PASSWORD,
-    'Set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD in .env.test to run this test'
+    'Set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD in environment variables to run this test'
   );
 
   test('no console errors or failed requests on admin panel after login', async ({ page }) => {
@@ -104,7 +103,7 @@ test.describe('Admin panel', () => {
     await page.getByPlaceholder(/e-mail-adresse|email address/i).fill(process.env.TEST_ADMIN_EMAIL!);
     await page.getByPlaceholder(/passwort|password/i).fill(process.env.TEST_ADMIN_PASSWORD!);
     await page.getByRole('button', { name: /einloggen|sign in/i }).click();
-    await page.waitForURL(/#profile/, { timeout: 10000 });
+    await expect(page.getByText(/mein profil|my profile/i)).toBeVisible({ timeout: 15000 });
 
     await page.goto('/#admin');
     await page.waitForTimeout(3000); // admin panel loads several onSnapshot listeners
