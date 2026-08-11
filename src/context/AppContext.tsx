@@ -272,7 +272,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await signInWithPopup(auth, provider);
       setPageRouter('profile');
       addNotification(`Logged in with ${providerName}`, 'success');
-    } catch (error: any) { addNotification(error.message, 'error'); }
+    } catch (error: any) { 
+      // Silently ignore if the user simply closed the popup window
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        return; 
+      }
+      addNotification(error.message, 'error'); 
+    }
   };
 
   const loginEmail = async (email: string, pass: string) => {
