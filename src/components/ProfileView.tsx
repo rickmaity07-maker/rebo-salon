@@ -1,58 +1,19 @@
 "use client";
-
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { auth, db } from '../lib/firebase';
-import { verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential, updatePassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, updateDoc, collection, getDocs, query, where, writeBatch } from 'firebase/firestore';
-import { DataExportButton } from './DataExport';
-import { DeleteAccountButton, AccountDeletionModal } from './AccountDeletion';
-import { SUPPORTED_COUNTRIES as countryCodes } from '@/lib/phone';
-import { fallbackTranslations } from '../context/AppContext';
+import { useApp, Appointment, fallbackTranslations } from '@/context/AppContext';
+import { auth, db } from '@/lib/firebase';
+import { verifyBeforeUpdateEmail } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
 
-interface ServiceItem {
-  id: string;
-  name: string;
-  price: string;
-  durationMins: number;
-}
-
-interface Appointment {
-  id: string;
-  userId: string;
-  name: string;
-  phone: string;
-  services: string[];
-  totalDurationMins: number;
-  stylist: string;
-  date: string;
-  time: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'proposed';
-  proposedDate?: string;
-  proposedTime?: string;
-  sendsms: boolean;
-  usedReward: boolean;
-  notes?: string;
-  isEmergency?: boolean;
-  referenceImage?: string;
-}
-
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  haircutCount: number;
-  role: 'user' | 'admin';
-  photoURL?: string;
-  hasUpdatedPassword?: boolean;
-}
+const countryCodes = [
+  { code: '+49', label: 'Deutschland 🇩🇪' }, { code: '+43', label: 'Österreich 🇦🇹' }, { code: '+41', label: 'Schweiz 🇨🇭' },
+  { code: '+1', label: 'USA/Kanada 🇺🇸' }, { code: '+44', label: 'UK 🇬🇧' }, { code: '+33', label: 'Frankreich 🇫🇷' },
+  { code: '+39', label: 'Italien 🇮🇹' }, { code: '+34', label: 'Spanien 🇪🇸' }, { code: '+31', label: 'Niederlande 🇳🇱' },
+  { code: '+32', label: 'Belgien 🇧🇪' }, { code: '+48', label: 'Polen 🇵🇱' }, { code: '+46', label: 'Schweden 🇸🇪' },
+];
 
 export function ProfileView() {
-  const { 
-    t, theme, currentUser, appointments, 
-    addNotification, updateUserPassword 
-  } = useApp();
+  const { t, currentUser, appointments, addNotification, updateUserPassword, updateAppointmentStatus } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   
   const [editName, setEditName] = useState('');
@@ -68,17 +29,14 @@ export function ProfileView() {
   const [inputPassOTP, setInputPassOTP] = useState('');
   const [isVerifyingPassOTP, setIsVerifyingPassOTP] = useState(false);
 
-  const isHeritage = theme === 'heritage';
-  const primaryColor = isHeritage ? 'text-[#c5a059]' : 'text-[#d4af37]';
-  const bgBorder = isHeritage ? 'border-[#c5a059]/30 bg-[#141310]' : 'border-white/10 bg-[#111]';
+  const primaryColor = 'text-[#d4af37]';
+  const bgBorder = 'border-white/10 bg-[#111]';
 
   const secTrans = t.security || fallbackTranslations.de.security;
   const authTrans = t.auth || fallbackTranslations.de.auth;
 
-  // Force Password Update Check
   const isEmailProvider = auth.currentUser?.providerData.some(p => p.providerId === 'password');
   const [showForcePasswordModal, setShowForcePasswordModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (currentUser && isEmailProvider && currentUser.hasUpdatedPassword !== true) {
@@ -121,9 +79,7 @@ export function ProfileView() {
     if (newPass !== confirmPass) return addNotification("Passwörter stimmen nicht überein.", "error");
     if (newPass.length < 8) return addNotification("Passwort muss mindestens 8 Zeichen lang sein.", "error");
     
-    const array = new Uint32Array(1);
-    crypto.getRandomValues(array);
-    const otp = String(100000 + (array[0] % 900000)).padStart(6, '0');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedPassOTP(otp);
     setIsVerifyingPassOTP(true);
     
@@ -139,7 +95,7 @@ export function ProfileView() {
         })
       });
       addNotification("Bestätigungscode an E-Mail gesendet!", "info");
-    } catch (err) { addNotification("Fehler beim Senden des Codes.", "error"); setIsVerifyingPassOTP(false); }
+    } catch (err) { addNotification("Fehler beim Senden Codes.", "error"); setIsVerifyingPassOTP(false); }
   };
 
   const handleVerifyPassOTP = async (e: React.FormEvent) => {
@@ -154,22 +110,6 @@ export function ProfileView() {
     }
   };
 
-  const resetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editEmail) return addNotification("Bitte geben Sie Ihre E-Mail-Adresse ein.", "error");
-    try {
-      await sendPasswordResetEmail(auth, editEmail);
-      addNotification("Link zum Zurücksetzen gesendet!", "success");
-    } catch (err: any) { addNotification(err.message, "error"); }
-  };
-
-  const userAppts = appointments
-    .filter(a => a.userId === currentUser.id)
-    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const upcoming = userAppts.filter(a => a.status === 'pending' || a.status === 'proposed');
-  const past = userAppts.filter(a => a.status === 'confirmed');
-
-  // Password Rules Calculation
   const hasLength = newPass.length >= 8;
   const hasUpper = /[A-Z]/.test(newPass);
   const hasLower = /[a-z]/.test(newPass);
@@ -180,14 +120,17 @@ export function ProfileView() {
   const passColor = passScore <= 2 ? 'bg-red-500' : passScore <= 4 ? 'bg-yellow-500' : 'bg-green-500';
   const passLabel = passScore <= 2 ? (authTrans.weak || 'Schwach') : passScore <= 4 ? (authTrans.medium || 'Mittel') : (authTrans.strong || 'Stark');
 
+  const userAppts = appointments.filter((a: Appointment) => a.userId === currentUser.id).sort((a: Appointment, b: Appointment) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const upcoming = userAppts.filter((a: Appointment) => a.status === 'pending' || a.status === 'proposed');
+  const past = userAppts.filter((a: Appointment) => a.status === 'confirmed');
+
   return (
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
-      {/* FORCE PASSWORD CHANGE MODAL FOR OLD USERS */}
       {showForcePasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <div className={`p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 ${isHeritage ? 'bg-[#141310] border-[#c5a059]/50' : 'bg-[#111] border-white/20'}`}>
-            <h3 className={`text-2xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase text-red-400'}`}>{secTrans.title}</h3>
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 bg-[#111] border-white/20">
+            <h3 className="text-2xl font-bold mb-2 uppercase text-red-400">{secTrans.title}</h3>
             <p className="text-gray-400 text-sm mb-6 leading-relaxed">{secTrans.desc}</p>
             
             {!isVerifyingPassOTP ? (
@@ -209,7 +152,7 @@ export function ProfileView() {
                    <label className="block text-xs uppercase text-gray-400 mb-2">{secTrans.confirmPass}</label>
                    <input required type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
                  </div>
-                 <button type="submit" disabled={!hasLength} className={`w-full py-4 font-bold uppercase text-xs rounded-sm mt-4 disabled:opacity-50 ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>{secTrans.sendCode}</button>
+                 <button type="submit" disabled={!hasLength} className="w-full py-4 font-bold uppercase text-xs rounded-sm mt-4 disabled:opacity-50 bg-[#d4af37] text-black">{secTrans.sendCode}</button>
               </form>
             ) : (
               <form onSubmit={handleVerifyPassOTP} className="space-y-5">
@@ -219,7 +162,7 @@ export function ProfileView() {
                 </div>
                 <div className="flex gap-4 mt-8">
                   <button type="button" onClick={() => setIsVerifyingPassOTP(false)} className="flex-1 py-4 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">{secTrans.cancel}</button>
-                  <button type="submit" className={`flex-1 py-4 uppercase text-xs font-bold text-black rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>{secTrans.confirmBtn}</button>
+                  <button type="submit" className="flex-1 py-4 uppercase text-xs font-bold text-black rounded-sm transition-colors bg-[#d4af37] hover:bg-white">{secTrans.confirmBtn}</button>
                 </div>
               </form>
             )}
@@ -229,19 +172,19 @@ export function ProfileView() {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
          <div>
-           <h2 className={`text-3xl md:text-5xl font-bold mb-2 ${isHeritage ? 'font-serif-custom text-[#c5a059]' : 'uppercase tracking-tight'}`}>{t.profile.title}</h2>
-           <p className="text-gray-400 text-sm md:text-base">Willkommen zurück, {currentUser.name}</p>
+           <h2 className="text-3xl md:text-5xl font-bold mb-2 uppercase tracking-tight">{t.profile.title}</h2>
+           <p className="text-gray-400 text-sm md:text-base">{t.profile?.welcome || "Willkommen zurück"}, {currentUser.name}</p>
          </div>
          <div className="flex gap-2 bg-black border border-white/10 p-1 rounded-sm">
-            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'overview' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>Übersicht</button>
-            <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'settings' ? (isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black') : 'text-gray-400 hover:text-white'}`}>Einstellungen</button>
+            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'overview' ? 'bg-[#d4af37] text-black' : 'text-gray-400 hover:text-white'}`}>{t.profile?.overview || "Übersicht"}</button>
+            <button onClick={() => setActiveTab('settings')} className={`px-4 py-2 text-xs uppercase font-bold tracking-widest transition-colors ${activeTab === 'settings' ? 'bg-[#d4af37] text-black' : 'text-gray-400 hover:text-white'}`}>{t.profile?.settings || "Einstellungen"}</button>
          </div>
       </div>
 
       {activeTab === 'settings' ? (
         <div className={`p-6 md:p-10 border rounded-sm shadow-xl space-y-10 ${bgBorder}`}>
            <form onSubmit={handleUpdateSettings} className="space-y-6">
-             <h3 className="text-xl font-bold mb-4">Profil bearbeiten</h3>
+             <h3 className="text-xl font-bold mb-4">{t.profile?.editProfile || "Profil bearbeiten"}</h3>
              <div>
                <label className="block text-xs uppercase text-gray-400 mb-2">Vollständiger Name</label>
                <input required value={editName} onChange={e=>setEditName(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
@@ -254,12 +197,12 @@ export function ProfileView() {
                <label className="block text-xs uppercase text-gray-400 mb-2">Telefonnummer</label>
                <div className="flex gap-2">
                   <select value={editCountryCode} onChange={e=>setEditCountryCode(e.target.value)} className="w-[30%] bg-black border border-white/20 p-4 rounded-sm text-white">
-                    {countryCodes.map(c => <option key={c.code} value={c.code}>{c.code} {c.name}</option>)}
+                    {countryCodes.map(c => <option key={c.code} value={c.code}>{c.code} {c.label}</option>)}
                   </select>
                   <input required value={editPhone} onChange={e=>setEditPhone(e.target.value)} type="tel" className="w-[70%] bg-black border border-white/20 p-4 rounded-sm text-white" />
                </div>
              </div>
-             <button type="submit" className={`w-full py-4 font-bold uppercase text-xs rounded-sm ${isHeritage ? 'bg-[#c5a059] text-black' : 'bg-[#d4af37] text-black'}`}>Einstellungen speichern</button>
+             <button type="submit" className="w-full py-4 font-bold uppercase text-xs rounded-sm bg-[#d4af37] text-black">Einstellungen speichern</button>
            </form>
 
            <div className="border-t border-gray-800 pt-8">
@@ -305,36 +248,19 @@ export function ProfileView() {
                   </div>
                   <div className="flex gap-4 mt-4">
                     <button type="button" onClick={() => setIsVerifyingPassOTP(false)} className="flex-1 py-3 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">{secTrans.cancel}</button>
-                    <button type="submit" className={`flex-1 py-3 uppercase text-xs font-bold text-black rounded-sm transition-colors ${isHeritage ? 'bg-[#c5a059] hover:bg-white' : 'bg-[#d4af37] hover:bg-white'}`}>{secTrans.confirmBtn}</button>
+                    <button type="submit" className="flex-1 py-3 uppercase text-xs font-bold text-black rounded-sm transition-colors bg-[#d4af37] hover:bg-white">{secTrans.confirmBtn}</button>
                   </div>
                 </form>
               )}
-            </div>
-
-            {/* GDPR Rights Section */}
-            <div className="border-t border-gray-800 pt-8">
-              <h3 className="text-xl font-bold mb-6 text-yellow-500">Ihre Datenschutzrechte (DSGVO)</h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-4 border border-white/10 rounded-lg bg-white/5">
-                  <h4 className="font-bold text-white mb-2">Art. 20 – Recht auf Datenübertragbarkeit</h4>
-                  <p className="text-sm text-gray-400 mb-4">Laden Sie alle Ihre personenbezogenen Daten in einem maschinenlesbaren Format (JSON) herunter.</p>
-                  <DataExportButton />
-                </div>
-                <div className="p-4 border border-red-500/30 rounded-lg bg-red-500/5">
-                  <h4 className="font-bold text-red-400 mb-2">Art. 17 – Recht auf Löschung</h4>
-                  <p className="text-sm text-gray-400 mb-4">Löschen Sie Ihr Konto und alle personenbezogenen Daten unwiderruflich.</p>
-                  <DeleteAccountButton onOpenModal={() => setShowDeleteModal(true)} />
-                </div>
-              </div>
-            </div>
-          </div>
+           </div>
+        </div>
       ) : (
         <>
           <div className={`p-6 md:p-8 mb-6 border rounded-sm flex items-center justify-between shadow-xl ${bgBorder}`}>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">Kontaktdaten</p>
+              <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">{t.profile?.contactData || "Kontaktdaten"}</p>
               <p className="text-lg font-bold">{currentUser.email}</p>
-              <p className="text-gray-300 mt-1">{currentUser.phone || "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen."}</p>
+              <p className="text-gray-300 mt-1">{currentUser.phone || t.profile?.noPhone || "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen."}</p>
             </div>
             <button onClick={() => setActiveTab('settings')} className="p-3 border border-white/20 rounded-sm hover:bg-white/5 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -345,7 +271,7 @@ export function ProfileView() {
             <h3 className="text-lg md:text-xl font-bold mb-2">{t.profile.pointsTitle}</h3>
             <p className="text-xs md:text-sm text-gray-400 mb-6">{t.profile.pointsDesc}</p>
             <div className="w-full h-4 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
-              <div className={`h-full transition-all duration-1000 ${isHeritage ? 'bg-[#c5a059]' : 'bg-[#d4af37]'}`} style={{ width: `${(currentUser.haircutCount / 10) * 100}%` }} />
+              <div className="h-full transition-all duration-1000 bg-[#d4af37]" style={{ width: `${(currentUser.haircutCount / 10) * 100}%` }} />
             </div>
             <p className={`text-right mt-2 text-sm font-bold ${primaryColor}`}>{currentUser.haircutCount} / 10</p>
           </div>
@@ -354,13 +280,25 @@ export function ProfileView() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
               <div className="space-y-4">
-                {upcoming.map(a => {
+                {upcoming.map((a: Appointment) => {
                   const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
                       <p className="font-bold text-base">{sList}</p>
-                      <p className="text-xs text-gray-400 mb-3">{a.date} um {a.time} bei {a.stylist} ({a.totalDurationMins || 60} Min)</p>
-                      <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{a.status === 'pending' ? 'Ausstehend' : 'Vorgeschlagen'}</span>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} {t.common?.at || 'um'} {a.time} {t.common?.by || 'bei'} {a.stylist} ({a.totalDurationMins || 60} {t.services?.min || 'Minuten'})</p>
+                      
+                      {a.status === 'proposed' ? (
+                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-sm">
+                          <p className="text-blue-400 text-xs font-bold mb-2">⚠️ {t.profile?.newProposal || "Neuer Terminvorschlag vom Salon:"}</p>
+                          <p className="text-white text-sm mb-3">{a.proposedDate} um {a.proposedTime} Uhr</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', true, undefined, a.proposedDate, a.proposedTime)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold uppercase rounded-sm">{t.profile?.acceptTime || "Zeit Akzeptieren"}</button>
+                            <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="border border-red-500/50 text-red-400 hover:bg-red-500/10 px-3 py-1.5 text-xs font-bold uppercase rounded-sm">{t.profile?.cancel || "Stornieren"}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] uppercase bg-yellow-600/20 text-yellow-400 border border-yellow-600 px-3 py-1 rounded-sm">{t.profile?.pending || "Ausstehend"}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -371,13 +309,13 @@ export function ProfileView() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
               <div className="space-y-4">
-                {past.map(a => {
+                {past.map((a: Appointment) => {
                   const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
                       <p className="font-bold text-base">{sList}</p>
-                      <p className="text-xs text-gray-400 mb-3">{a.date} bei {a.stylist}</p>
-                      <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">Abgeschlossen</span>
+                      <p className="text-xs text-gray-400 mb-3">{a.date} {t.common?.by || 'bei'} {a.stylist}</p>
+                      <span className="text-[10px] uppercase bg-green-600/20 text-green-400 border border-green-600 px-3 py-1 rounded-sm">{t.profile?.completed || "Abgeschlossen"}</span>
                     </div>
                   );
                 })}
@@ -387,8 +325,6 @@ export function ProfileView() {
           </div>
         </>
       )}
-
-      <AccountDeletionModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} />
     </div>
   );
 }
