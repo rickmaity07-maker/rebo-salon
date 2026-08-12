@@ -63,7 +63,12 @@ export const fallbackTranslations: TranslationData = {
     hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, 
     about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, 
     services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
-    gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [] }, 
+    gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [
+      "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=800&q=80",
+      "https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80",
+      "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80",
+      "https://images.unsplash.com/photo-1516975080661-4602f3066a24?w=800&q=80"
+    ] }, 
     products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
     contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?", passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark", ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen" }, 
@@ -80,7 +85,12 @@ export const fallbackTranslations: TranslationData = {
     hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." }, 
     about: { title: "About Us", text: "Welcome to Rebo Salon." }, 
     services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday", min: "minutes" }, 
-    gallery: { title: "Our Work", subtitle: "Inside the salon", images: [] }, 
+    gallery: { title: "Our Work", subtitle: "Inside the salon", images: [
+      "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=800&q=80",
+      "https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80",
+      "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80",
+      "https://images.unsplash.com/photo-1516975080661-4602f3066a24?w=800&q=80"
+    ] }, 
     products: { title: "Store & Products", subtitle: "Professional care for home" }, 
     contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?", passStrength: "Password Strength:", weak: "Weak", medium: "Medium", strong: "Strong", ruleLength: "At least 8 characters", ruleUpper: "One uppercase letter", ruleLower: "One lowercase letter", ruleNum: "One number", ruleSpec: "One special character" }, 
@@ -98,12 +108,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>('de'); 
   const [isTranslatingUI, setIsTranslatingUI] = useState(false);
-  const [rawPage, setRawPage] = useState<Page>('home');
+  const [page, setPageState] = useState<Page>('home');
   const [translations, setTranslations] = useState<TranslationData>(fallbackTranslations);
   
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAdminAuth, setIsAdminAuth] = useState(false);
-  const [authResolved, setAuthResolved] = useState(false);
   
   const [servicesDB, setServicesDB] = useState<ServiceItem[]>([]);
   const [productsDB, setProductsDB] = useState<ProductItem[]>([]);
@@ -145,9 +154,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as Page;
       if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin', 'auth', 'profile'].includes(hash)) {
-        setRawPage(hash);
+        setPageState(hash);
       } else {
-        setRawPage('home');
+        setPageState('home');
       }
     };
     handlePopState();
@@ -155,35 +164,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // `rawPage` reflects whatever the URL hash says, set directly by the
-  // popstate handler above with no authorization check. `page` (what the
-  // rest of the app actually reads and renders) is derived from it here so
-  // every route, no matter how `rawPage` got set, passes through the same
-  // gate before anything protected renders — typing e.g. #admin into the
-  // address bar can no longer bypass the login/role check that setPageRouter
-  // enforces for in-app navigation. This is computed during render rather
-  // than via setState-in-effect, so there's no unguarded frame in between.
-  // Gating waits for authResolved so a legitimate admin reloading on #admin
-  // isn't bounced before Firebase has had a chance to restore their session.
-  const page: Page = !authResolved
-    ? rawPage
-    : (rawPage === 'booking' || rawPage === 'profile') && !currentUser
-      ? 'auth'
-      : rawPage === 'admin' && (!currentUser || currentUser.role !== 'admin')
-        ? 'home'
-        : rawPage;
-
-  useEffect(() => {
-    if (page === rawPage) return;
-    const newUrl = page === 'home' ? window.location.pathname : `#${page}`;
-    window.history.replaceState(null, '', newUrl);
-  }, [page, rawPage]);
-
   const setPageRouter = (newPage: Page) => {
     if (newPage !== page) {
       if ((newPage === 'booking' || newPage === 'profile') && !currentUser) {
         window.history.pushState(null, '', '#auth');
-        setRawPage('auth');
+        setPageState('auth');
         return;
       }
       if (newPage === 'admin' && (!currentUser || currentUser.role !== 'admin')) {
@@ -192,7 +177,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const newUrl = newPage === 'home' ? window.location.pathname : `#${newPage}`;
       window.history.pushState(null, '', newUrl);
-      setRawPage(newPage);
+      setPageState(newPage);
       window.scrollTo(0, 0);
     }
   };
@@ -239,7 +224,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (unsubAppts) { unsubAppts(); unsubAppts = null; }
         if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
       }
-      setAuthResolved(true);
     });
 
     const unsubTrans = onSnapshot(doc(db, 'settings', 'translations'), (snap) => {
@@ -392,9 +376,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const docRef = await addDoc(collection(db, 'appointments'), appt);
     const userRef = doc(db, 'users', currentUser.id);
-
+    
     if (appt.usedReward) await updateDoc(userRef, { haircutCount: Math.max(0, currentUser.haircutCount - 10) });
-
+    else await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
+    
     await sendDualEmail(
       currentUser.email,
       "Rebo Salon: Buchungsanfrage erhalten",
@@ -426,24 +411,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     await updateDoc(doc(db, 'appointments', id), updates);
 
-    if (status === 'confirmed' && appt.status !== 'confirmed') {
-      const userRef = doc(db, 'users', appt.userId);
-      const userDoc = await getDoc(userRef);
-      if (userDoc.exists()) {
-        await updateDoc(userRef, { haircutCount: (userDoc.data().haircutCount || 0) + 1 });
-      }
-    }
-
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
         const uData = userDoc.data();
-        if (appt.usedReward) await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 });
-        // Only refund an earned point if this appointment had actually been confirmed before —
-        // points are now granted on confirmation, not on request, so a rejected pending request
-        // never earned one in the first place.
-        else if (appt.status === 'confirmed') await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) });
+        if (appt.usedReward) await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 }); 
+        else await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) }); 
       }
     }
 
@@ -523,4 +497,4 @@ export function useApp() {
   const context = useContext(AppContext);
   if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
-}
+} 
