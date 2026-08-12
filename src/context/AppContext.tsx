@@ -98,11 +98,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Language>('de'); 
   const [isTranslatingUI, setIsTranslatingUI] = useState(false);
-  const [page, setPageState] = useState<Page>('home');
+  const [rawPage, setRawPage] = useState<Page>('home');
   const [translations, setTranslations] = useState<TranslationData>(fallbackTranslations);
   
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAdminAuth, setIsAdminAuth] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
   
   const [servicesDB, setServicesDB] = useState<ServiceItem[]>([]);
   const [productsDB, setProductsDB] = useState<ProductItem[]>([]);
@@ -144,9 +145,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as Page;
       if (['home', 'services', 'gallery', 'products', 'contact', 'booking', 'admin', 'auth', 'profile'].includes(hash)) {
-        setPageState(hash);
+        setRawPage(hash);
       } else {
-        setPageState('home');
+        setRawPage('home');
       }
     };
     handlePopState();
@@ -154,11 +155,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // `rawPage` reflects whatever the URL hash says, set directly by the
+  // popstate handler above with no authorization check. `page` (what the
+  // rest of the app actually reads and renders) is derived from it here so
+  // every route, no matter how `rawPage` got set, passes through the same
+  // gate before anything protected renders — typing e.g. #admin into the
+  // address bar can no longer bypass the login/role check that setPageRouter
+  // enforces for in-app navigation. This is computed during render rather
+  // than via setState-in-effect, so there's no unguarded frame in between.
+  // Gating waits for authResolved so a legitimate admin reloading on #admin
+  // isn't bounced before Firebase has had a chance to restore their session.
+  const page: Page = !authResolved
+    ? rawPage
+    : (rawPage === 'booking' || rawPage === 'profile') && !currentUser
+      ? 'auth'
+      : rawPage === 'admin' && (!currentUser || currentUser.role !== 'admin')
+        ? 'home'
+        : rawPage;
+
+  useEffect(() => {
+    if (page === rawPage) return;
+    const newUrl = page === 'home' ? window.location.pathname : `#${page}`;
+    window.history.replaceState(null, '', newUrl);
+  }, [page, rawPage]);
+
   const setPageRouter = (newPage: Page) => {
     if (newPage !== page) {
       if ((newPage === 'booking' || newPage === 'profile') && !currentUser) {
         window.history.pushState(null, '', '#auth');
-        setPageState('auth');
+        setRawPage('auth');
         return;
       }
       if (newPage === 'admin' && (!currentUser || currentUser.role !== 'admin')) {
@@ -167,7 +192,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const newUrl = newPage === 'home' ? window.location.pathname : `#${newPage}`;
       window.history.pushState(null, '', newUrl);
-      setPageState(newPage);
+      setRawPage(newPage);
       window.scrollTo(0, 0);
     }
   };
@@ -214,6 +239,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (unsubAppts) { unsubAppts(); unsubAppts = null; }
         if (unsubAlerts) { unsubAlerts(); unsubAlerts = null; }
       }
+      setAuthResolved(true);
     });
 
     const unsubTrans = onSnapshot(doc(db, 'settings', 'translations'), (snap) => {
@@ -366,10 +392,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     const docRef = await addDoc(collection(db, 'appointments'), appt);
     const userRef = doc(db, 'users', currentUser.id);
-    
+
     if (appt.usedReward) await updateDoc(userRef, { haircutCount: Math.max(0, currentUser.haircutCount - 10) });
-    else await updateDoc(userRef, { haircutCount: currentUser.haircutCount + 1 });
-    
+
     await sendDualEmail(
       currentUser.email,
       "Rebo Salon: Buchungsanfrage erhalten",
@@ -401,13 +426,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     
     await updateDoc(doc(db, 'appointments', id), updates);
 
+    if (status === 'confirmed' && appt.status !== 'confirmed') {
+      const userRef = doc(db, 'users', appt.userId);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        await updateDoc(userRef, { haircutCount: (userDoc.data().haircutCount || 0) + 1 });
+      }
+    }
+
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
         const uData = userDoc.data();
-        if (appt.usedReward) await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 }); 
-        else await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) }); 
+        if (appt.usedReward) await updateDoc(userRef, { haircutCount: uData.haircutCount + 10 });
+        // Only refund an earned point if this appointment had actually been confirmed before —
+        // points are now granted on confirmation, not on request, so a rejected pending request
+        // never earned one in the first place.
+        else if (appt.status === 'confirmed') await updateDoc(userRef, { haircutCount: Math.max(0, uData.haircutCount - 1) });
       }
     }
 

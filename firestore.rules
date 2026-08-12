@@ -21,7 +21,24 @@ service cloud.firestore {
     match /appointments/{apptId} {
       allow read: if isOwnerOrAdmin(resource.data.userId);
       allow create: if isOwner(request.resource.data.userId);
-      allow update: if isOwnerOrAdmin(resource.data.userId);
+      // Owners may only: attach a reference image, or respond to a proposed
+      // reschedule (accept -> confirmed, or reject -> cancelled). Anything else
+      // (self-confirming a pending booking, editing notes/date/time/stylist
+      // outright) requires admin.
+      allow update: if isAdmin() || (
+        isOwner(resource.data.userId) && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['referenceImage']) ||
+          (
+            resource.data.status == 'proposed' &&
+            (
+              (request.resource.data.status == 'confirmed' &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'date', 'time', 'proposedDate', 'proposedTime'])) ||
+              (request.resource.data.status == 'cancelled' &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+            )
+          )
+        )
+      );
       allow delete: if isAdmin();
     }
 
