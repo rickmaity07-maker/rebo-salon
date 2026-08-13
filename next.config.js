@@ -14,7 +14,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googletagmanager.com https://connect.facebook.net",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' data: https://fonts.gstatic.com",
+              "font-old 'self' data: https://fonts.gstatic.com",
               "img-src 'self' data: https: blob: https://images.unsplash.com https://firebasestorage.googleapis.com",
               "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.mymemory.translated.net https://api-free.deepl.com https://api.deepl.com https://www.google-analytics.com https://region1.google-analytics.com wss://*.firebaseio.com",
               // CRITICAL FIX FOR FIREBASE AUTH:
@@ -141,6 +141,9 @@ const nextConfig = {
     // Remove console.log in production
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
+
+  // CRITICAL FIX: Skip bundling for firebase-admin to fix the ESM jose error on Vercel
+  serverExternalPackages: ['firebase-admin'],
 
   // Output configuration for static export if needed
   // output: 'export',
