@@ -17,6 +17,7 @@ export type Appointment = {
   proposedDate?: string; proposedTime?: string;
   sendsms: boolean; usedReward: boolean; notes?: string; isEmergency?: boolean;
   referenceImage?: string; 
+  specialRequests?: string;
 };
 
 export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
@@ -53,14 +54,14 @@ export interface AppContextType {
   productsDB: ProductItem[]; addProduct: (p: Omit<ProductItem, 'id'>) => Promise<void>; deleteProduct: (id: string) => Promise<void>;
   notifications: Notification[]; addNotification: (msg: string, type?: 'success' | 'info' | 'error') => void;
   alerts: Alert[]; markAlertRead: (id: string) => Promise<void>; clearAlerts: () => Promise<void>;
-  getAvailableSlots: (date: string, requiredDuration?: number) => TimeSlot[];
+  getAvailableSlots: (date: string, stylist: string, requiredDuration?: number) => TimeSlot[];
 }
 
 export const fallbackTranslations: TranslationData = {
   de: { 
     common: { loading: "Lädt...", searchLang: "Sprache suchen...", noResults: "Keine gefunden.", footer: "Alle Rechte vorbehalten.", design: "Design", at: "um", by: "bei" },
     nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Profil", logout: "Abmelden", admin: "Admin Panel" }, 
-    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt." }, 
+    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt.", walkin: "Ohne Termin möglich (Wartezeit bis zu 30 Minuten)" }, 
     about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, 
     services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
     gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [
@@ -72,17 +73,17 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
     contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?", passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark", ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen" }, 
-    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen" }, 
+    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], requestsLabel: "Besondere Wünsche / Notizen (Optional)", date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen" }, 
     profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern", welcome: "Willkommen zurück", overview: "Übersicht", settings: "Einstellungen", editProfile: "Profil bearbeiten", contactData: "Kontaktdaten", noPhone: "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen.", acceptTime: "Zeit Akzeptieren", cancel: "Stornieren", pending: "Ausstehend", completed: "Abgeschlossen", newProposal: "Neuer Terminvorschlag vom Salon:" }, 
     notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
     security: { title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden" },
-    admin: { title: "Admin Control Panel", tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern" } },
+    admin: { title: "Admin Control Panel", tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot", allStylists: "Alle Stylisten" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern" } },
     alertsMsg: { confirmed1: "Dein Termin am", confirmed2: "Uhr wurde bestätigt!", cancelled1: "Dein Termin am", cancelled2: "wurde leider storniert.", proposed1: "Neuer Termin-Vorschlag:", proposed2: "Bitte bestätigen!" }
   },
   en: { 
     common: { loading: "Loading...", searchLang: "Search language...", noResults: "None found.", footer: "All rights reserved.", design: "Design", at: "at", by: "with" },
     nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "Profile", logout: "Log Out", admin: "Admin Panel" }, 
-    hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt." }, 
+    hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt.", walkin: "Walk-in possible (Waiting time up to 30 minutes)" }, 
     about: { title: "About Us", text: "Welcome to Rebo Salon." }, 
     services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday", min: "minutes" }, 
     gallery: { title: "Our Work", subtitle: "Inside the salon", images: [
@@ -94,11 +95,11 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Products", subtitle: "Professional care for home" }, 
     contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?", passStrength: "Password Strength:", weak: "Weak", medium: "Medium", strong: "Strong", ruleLength: "At least 8 characters", ruleUpper: "One uppercase letter", ruleLower: "One lowercase letter", ruleNum: "One number", ruleSpec: "One special character" }, 
-    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment" }, 
+    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], requestsLabel: "Special Requests / Notes (Optional)", date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment" }, 
     profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note", welcome: "Welcome back", overview: "Overview", settings: "Settings", editProfile: "Edit Profile", contactData: "Contact Data", noPhone: "No phone number saved. Please add in settings.", acceptTime: "Accept Time", cancel: "Cancel", pending: "Pending", completed: "Completed", newProposal: "New appointment proposal from salon:" }, 
     notifications: { title: "Notifications", empty: "No notifications.", clearAll: "Clear All" },
     security: { title: "Security Update", desc: "We updated our security standards. Please change your password to continue.", currentPass: "Current Password", newPass: "New Password", confirmPass: "Confirm New Password", sendCode: "Send code via E-Mail", enterCode: "E-Mail verification code", cancel: "Cancel", confirmBtn: "Confirm & Change", secTitle: "Password & Security", oauthMsg: "You are logged in via a third party (Google/Facebook). Password changes are not available here.", sendOtpBtn: "Send OTP via E-Mail" },
-    admin: { title: "Admin Control Panel", tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", uploadImg: "Upload Product Image", saveBtn: "Save Product" } },
+    admin: { title: "Admin Control Panel", tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot", allStylists: "All Stylists" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", uploadImg: "Upload Product Image", saveBtn: "Save Product" } },
     alertsMsg: { confirmed1: "Your appointment on", confirmed2: "has been confirmed!", cancelled1: "Your appointment on", cancelled2: "has been cancelled.", proposed1: "New appointment proposal:", proposed2: "Please confirm!" }
   }
 };
@@ -280,23 +281,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return h * 60 + m; 
   };
 
-  const getAvailableSlots = (date: string, requiredDuration: number = 60) => {
+  const getAvailableSlots = (date: string, stylist: string, requiredDuration: number = 60) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
     
+    const realStylists = ["Rebo (Inhaber)", "Anna", "Marcus"];
+
     return initialSlots.map(slot => {
       const slotMins = timeToMins(slot.time);
-      const isOverlapping = appointments.some(a => {
-        if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
-        
-        const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
-        const aEnd = aStart + (a.totalDurationMins || 60);
-        
-        const newStart = slotMins;
-        const newEnd = slotMins + requiredDuration;
-        
-        return newStart < aEnd && newEnd > aStart;
-      });
-      return { ...slot, isBooked: isOverlapping };
+      
+      let isBooked = false;
+      if (stylist && stylist !== 'Egal (Wer frei ist)' && stylist !== 'Any') {
+        isBooked = appointments.some(a => {
+          if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
+          if (a.stylist !== stylist && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
+          
+          const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
+          const aEnd = aStart + (a.totalDurationMins || 60);
+          
+          const newStart = slotMins;
+          const newEnd = slotMins + requiredDuration;
+          
+          return newStart < aEnd && newEnd > aStart;
+        });
+      } else {
+        let overlaps = 0;
+        realStylists.forEach(sName => {
+          const sBooked = appointments.some(a => {
+            if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
+            if (a.stylist !== sName && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
+            
+            const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
+            const aEnd = aStart + (a.totalDurationMins || 60);
+            return slotMins < aEnd && (slotMins + requiredDuration) > aStart;
+          });
+          if (sBooked) overlaps++;
+        });
+        isBooked = overlaps >= realStylists.length;
+      }
+
+      return { ...slot, isBooked };
     });
   };
 
@@ -385,7 +408,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       "Rebo Salon: Buchungsanfrage erhalten",
       `Hallo ${appt.name},\n\nDeine Anfrage für ${appt.services.join(', ')} am ${appt.date} um ${appt.time} Uhr wurde an den Salon übermittelt.\n\nWir prüfen derzeit die Verfügbarkeit und werden deinen Termin in Kürze bestätigen.\n\nDein Rebo Salon Team`,
       "🚨 Neuer Termin eingegangen!",
-      `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${appt.services.join(', ')} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen, abzulehnen oder zu verschieben.`
+      `Hallo Admin,\n\nEs gibt eine neue Buchung:\nKunde: ${appt.name} (${appt.phone})\nLeistungen: ${appt.services.join(', ')} (${appt.totalDurationMins} Min)\nDatum: ${appt.date} um ${appt.time} Uhr\nStylist: ${appt.stylist}\nWünsche: ${appt.specialRequests || '-'}\n\nBitte logge dich im Admin-Panel ein, um den Termin zu bestätigen, abzulehnen oder zu verschieben.`
     );
 
     addNotification("Appointment request sent!", 'success');
@@ -497,4 +520,4 @@ export function useApp() {
   const context = useContext(AppContext);
   if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
-} 
+}

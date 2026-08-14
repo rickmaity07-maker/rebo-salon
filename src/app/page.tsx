@@ -125,7 +125,7 @@ function NotificationBell() {
 function ToastContainer() {
   const { notifications } = useApp();
   return (
-    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-20 md:top-24 right-4 md:right-6 z-999 flex flex-col gap-2 pointer-events-none">
       {notifications.map(n => (
         <div key={n.id} className={`p-4 rounded shadow-2xl animate-in slide-in-from-right-8 duration-300 pointer-events-auto border-l-4 text-xs md:text-sm ${n.type === 'success' ? 'bg-[#111] border-green-500 text-green-400' : n.type === 'error' ? 'bg-[#111] border-red-500 text-red-400' : 'bg-[#111] border-[#d4af37] text-[#d4af37]'}`}>
           <p className="font-semibold">{n.message}</p>
@@ -374,9 +374,9 @@ function ProfileViewLocal() {
   const passColor = passScore <= 2 ? 'bg-red-500' : passScore <= 4 ? 'bg-yellow-500' : 'bg-green-500';
   const passLabel = passScore <= 2 ? (authTrans.weak || 'Schwach') : passScore <= 4 ? (authTrans.medium || 'Mittel') : (authTrans.strong || 'Stark');
 
-  const userAppts = appointments.filter((a: Appointment) => a.userId === currentUser.id).sort((a: Appointment, b: Appointment) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const upcoming = userAppts.filter((a: Appointment) => a.status === 'pending' || a.status === 'proposed');
-  const past = userAppts.filter((a: Appointment) => a.status === 'confirmed');
+  const userAppts = appointments.filter((a: any) => a.userId === currentUser.id).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const upcoming = userAppts.filter((a: any) => a.status === 'pending' || a.status === 'proposed');
+  const past = userAppts.filter((a: any) => a.status === 'confirmed');
 
   return (
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
@@ -534,7 +534,7 @@ function ProfileViewLocal() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.upcomingTitle}</h3>
               <div className="space-y-4">
-                {upcoming.map((a: Appointment) => {
+                {upcoming.map((a: any) => {
                   const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
@@ -563,7 +563,7 @@ function ProfileViewLocal() {
             <div>
               <h3 className="text-lg md:text-xl font-bold mb-6">{t.profile.historyTitle}</h3>
               <div className="space-y-4">
-                {past.map((a: Appointment) => {
+                {past.map((a: any) => {
                   const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                   return (
                     <div key={a.id} className={`p-5 border rounded-sm ${bgBorder}`}>
@@ -593,6 +593,9 @@ function AdminView() {
   const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
   
   const [calDate, setCalDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  // Calendar Stylist Filter State
+  const [calendarStylist, setCalendarStylist] = useState<string>('Alle Stylisten');
 
   // AI Translation State
   const [serviceNameDe, setServiceNameDe] = useState('');
@@ -612,8 +615,8 @@ function AdminView() {
   const primaryColor = 'text-[#d4af37]';
   const bgBorder = 'border-white/10 bg-[#111]';
 
-  const pendingAppts = appointments.filter((a: Appointment) => a.status === 'pending').sort((a: Appointment, b: Appointment) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const otherAppts = appointments.filter((a: Appointment) => a.status !== 'pending').sort((a: Appointment, b: Appointment) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const pendingAppts = appointments.filter((a: any) => a.status === 'pending').sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const otherAppts = appointments.filter((a: any) => a.status !== 'pending').sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const shiftDate = (days: number) => {
      const d = new Date(calDate); d.setDate(d.getDate() + days);
@@ -686,15 +689,33 @@ function AdminView() {
 
       {tab === 'calendar' && (
         <div className={`p-6 border rounded-sm ${bgBorder}`}>
+           
+           {/* Stylist Tabs inside Calendar */}
+           <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
+             {[t.admin?.calendar?.allStylists || 'Alle Stylisten', 'Rebo (Inhaber)', 'Anna', 'Marcus'].map(opt => (
+                <button 
+                  key={opt} 
+                  onClick={() => setCalendarStylist(opt)} 
+                  className={`px-4 py-2 text-xs font-bold uppercase rounded-sm border whitespace-nowrap transition-colors ${calendarStylist === opt ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'border-white/20 text-gray-400 hover:text-white hover:bg-white/5'}`}
+                >
+                   {opt}
+                </button>
+             ))}
+           </div>
+
            <div className="flex justify-between items-center mb-8">
-              <button onClick={() => shiftDate(-1)} className="px-4 py-2 border border-white/20 hover:bg-white/5">&larr; {t.admin?.calendar?.back || 'Zurück'}</button>
+              <button onClick={() => shiftDate(-1)} className="px-4 py-2 border border-white/20 hover:bg-white/5 rounded-sm">&larr; {t.admin?.calendar?.back || 'Zurück'}</button>
               <input type="date" value={calDate} onChange={e=>setCalDate(e.target.value)} className="bg-black border border-white/20 p-2 rounded-sm text-center font-bold" />
-              <button onClick={() => shiftDate(1)} className="px-4 py-2 border border-white/20 hover:bg-white/5">{t.admin?.calendar?.next || 'Weiter'} &rarr;</button>
+              <button onClick={() => shiftDate(1)} className="px-4 py-2 border border-white/20 hover:bg-white/5 rounded-sm">{t.admin?.calendar?.next || 'Weiter'} &rarr;</button>
            </div>
 
            <div className="space-y-4">
              {initialSlots.map((slot: TimeSlot) => {
-                const apptsInSlot = appointments.filter((a: Appointment) => a.date === calDate && a.time === slot.time && a.status !== 'cancelled');
+                const apptsInSlot = appointments.filter((a: any) => {
+                   if (a.date !== calDate || a.time !== slot.time || a.status === 'cancelled') return false;
+                   if (calendarStylist === 'Alle Stylisten' || calendarStylist === 'All Stylists') return true;
+                   return a.stylist === calendarStylist || a.stylist === 'Egal (Wer frei ist)' || a.stylist === 'Any';
+                });
                 return (
                   <div key={slot.id} className="flex gap-4 p-4 border border-white/10 rounded-sm bg-black/40">
                      <div className="w-20 pt-1">
@@ -702,7 +723,7 @@ function AdminView() {
                      </div>
                      <div className="flex-1 space-y-2">
                         {apptsInSlot.length === 0 ? <p className="text-gray-600 text-sm italic pt-1">{t.admin?.calendar?.freeSlot || 'Freier Slot'}</p> : null}
-                        {apptsInSlot.map((a: Appointment) => {
+                        {apptsInSlot.map((a: any) => {
                            const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                            return (
                               <div key={a.id} className={`p-4 border rounded-sm ${a.status === 'confirmed' ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
@@ -729,7 +750,7 @@ function AdminView() {
               {t.admin?.requests?.pending || 'Ausstehende Anfragen'} ({pendingAppts.length})
             </h3>
             <div className="space-y-4">
-              {pendingAppts.map((a: Appointment) => {
+              {pendingAppts.map((a: any) => {
                 const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                 return (
                   <div key={a.id} className="bg-black/80 p-5 border border-red-500/20 rounded-sm">
@@ -738,6 +759,7 @@ function AdminView() {
                         <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
                         <p className="text-sm text-gray-300 my-1"><span className="text-red-400 font-bold">{a.date} @ {a.time}</span> ({a.totalDurationMins || 60} {t.services?.min || 'Min'})</p>
                         <p className="text-sm text-gray-400">{t.admin?.requests?.services || 'Leistungen:'} {sList}</p>
+                        {a.specialRequests && <p className="text-sm text-yellow-400 mt-2"><strong>Wünsche:</strong> {a.specialRequests}</p>}
                         {a.referenceImage && (
                           <div className="mt-3">
                              <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">{t.admin?.requests?.refImage || 'Referenzbild:'}</p>
@@ -770,7 +792,7 @@ function AdminView() {
           <div className={`p-4 md:p-6 border rounded-sm ${bgBorder}`}>
             <h3 className="text-lg md:text-xl font-bold mb-6">{t.admin?.requests?.confirmed || 'Bestätigt & Historie'}</h3>
             <div className="space-y-4">
-              {otherAppts.map((a: Appointment) => {
+              {otherAppts.map((a: any) => {
                 const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                 return (
                   <div key={a.id} className="bg-black/50 p-5 border border-white/10 rounded-sm">
@@ -779,6 +801,7 @@ function AdminView() {
                          <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
                          <p className="text-sm text-gray-300">{sList} — {a.date} @ {a.time}</p>
                          <p className={`text-xs mt-2 font-bold uppercase ${a.status==='confirmed'?'text-green-400':a.status==='cancelled'?'text-red-400':'text-blue-400'}`}>{t.admin?.requests?.status || 'Status'}: {a.status === 'confirmed' ? (t.profile?.completed || 'Abgeschlossen') : a.status === 'pending' ? (t.profile?.pending || 'Ausstehend') : a.status === 'cancelled' ? (t.profile?.cancel || 'Stornieren') : a.status}</p>
+                         {a.specialRequests && <p className="text-sm text-yellow-400 mt-2"><strong>Wünsche:</strong> {a.specialRequests}</p>}
                        </div>
                        {a.referenceImage && <img src={a.referenceImage} alt="Ref" className="h-16 w-16 object-cover rounded-sm border border-white/10" />}
                      </div>
@@ -922,11 +945,12 @@ function BookingView() {
   const [bookingDate, setBookingDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [stylist, setStylist] = useState("Egal (Wer frei ist)");
+  const [specialRequests, setSpecialRequests] = useState("");
   const [refImageFile, setRefImageFile] = useState<File | null>(null);
   const [refImagePreview, setRefImagePreview] = useState<string | null>(null);
   
   const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMins || 60), 0);
-  const openSlots = getAvailableSlots(bookingDate, totalDuration);
+  const openSlots = getAvailableSlots(bookingDate, stylist, totalDuration);
 
   useEffect(() => {
     if (currentUser) {
@@ -988,9 +1012,10 @@ function BookingView() {
       date: bookingDate,
       time: openSlots.find(s => s.id === selectedSlot)?.time || '00:00',
       status: 'pending',
+      specialRequests: specialRequests,
       sendsms: true, usedReward: false, isEmergency: false,
       referenceImage: ''
-    });
+    } as any);
 
     if (refImageFile && appointmentRef?.id) {
       try {
@@ -1003,6 +1028,7 @@ function BookingView() {
     }
 
     clearImageUpload();
+    setSpecialRequests("");
     setSubmitted(true);
   };
 
@@ -1071,7 +1097,7 @@ function BookingView() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.stylist}</label>
-                  <select value={stylist} onChange={e=>setStylist(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white">
+                  <select value={stylist} onChange={e=>{setStylist(e.target.value); setSelectedSlot("");}} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white">
                     {t.booking.stylistOptions.map((opt: string, i: number) => <option key={i} value={opt}>{opt}</option>)}
                   </select>
                 </div>
@@ -1097,6 +1123,11 @@ function BookingView() {
                       />
                     )}
                   </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking?.requestsLabel || "Besondere Wünsche / Notizen (Optional)"}</label>
+                <textarea value={specialRequests} onChange={e=>setSpecialRequests(e.target.value)} rows={2} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
               </div>
 
               <div>
@@ -1236,7 +1267,10 @@ function MainContent() {
               <div className="relative z-20 text-center max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
                 <span className="text-[#d4af37] text-xs md:text-sm font-bold tracking-[0.3em] uppercase mb-4 block">Est. Schweinfurt</span>
                 <h1 className="text-4xl sm:text-6xl md:text-8xl font-extrabold tracking-tighter mb-6 leading-tight uppercase">{t.hero.title}</h1>
-                <p className="text-base md:text-2xl text-gray-300 font-light mb-8 max-w-2xl mx-auto">{t.hero.sub}</p>
+                <p className="text-base md:text-2xl text-gray-300 font-light mb-4 max-w-2xl mx-auto">{t.hero.sub}</p>
+                <p className="text-[#d4af37] text-xs md:text-sm font-bold tracking-widest uppercase mb-8 max-w-2xl mx-auto">
+                  {t.hero.walkin || "Ohne Termin möglich (Wartezeit bis zu 30 Minuten)"}
+                </p>
                 <button onClick={() => setPage('booking')} className="bg-[#d4af37] text-black px-8 md:px-10 py-3.5 md:py-4 font-bold uppercase tracking-widest text-xs md:text-sm hover:bg-white transition-all shadow-[0_0_30px_rgba(212,175,55,0.2)]">{t.nav.book}</button>
               </div>
             </section>

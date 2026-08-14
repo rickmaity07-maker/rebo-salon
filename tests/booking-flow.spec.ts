@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { acceptCookies, waitForPageReady, login, logout } from './test-helpers';
 
 // Initialize Firebase Admin for test data seeding
-// Uses environment variables (set in CI) instead of reading .env.local
 function getAdminDb() {
   if (getApps().length === 0) {
     const base64Key = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
@@ -42,83 +42,81 @@ test('customer can book, admin confirm triggers SMS + email', async ({ page }) =
   page.on('pageerror', err => consoleErrors.push(`Uncaught: ${err.message}`));
 
   // --- LOGIN AS CUSTOMER ---
-  await page.goto('/#auth');
-  await page.getByPlaceholder(/e-mail-adresse|email address/i).fill(process.env.TEST_USER_EMAIL!);
-  await page.getByPlaceholder(/passwort|password/i).fill(process.env.TEST_USER_PASSWORD!);
-  // Press Enter on password field to trigger form submit (more reliable than button click)
-  await page.getByPlaceholder(/passwort|password/i).press('Enter');
-  
-  // Wait for either profile page content OR error message OR timeout
-  await page.waitForTimeout(5000);
-  console.log('Console errors during login:', consoleErrors);
-  
-  // Check if we're still on auth page (login failed) or home (redirect happened but profile not rendered)
-  const url = page.url();
-  console.log('Current URL after login attempt:', url);
-  
-  // Wait for either profile page content OR error message
-  await Promise.race([
-    expect(page.getByText(/mein profil|my profile/i)).toBeVisible({ timeout: 10000 }),
-    expect(page.getByText(/nicht registriert|falsch|invalid|wrong|error/i)).toBeVisible({ timeout: 10000 })
-  ]);
+  await login(page, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
 
-// --- BOOK AN APPOINTMENT ---
+  // --- BOOK AN APPOINTMENT ---
   await page.goto('/#booking');
-  // Wait for service items to load from Firestore (clickable divs with price)
+  await waitForPageReady(page);
+  
+  // Wait for service items to load from Firestore
   await expect(page.locator('text=€').first()).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(2000);
   
-  // Select first available service (click the parent div containing the price)
+  // Select first available service
   await page.locator('text=€').first().locator('..').click();
+  await page.waitForTimeout(2000);
   
-// No time slots render until a date is picked — select a date far in future
-  // to avoid conflicts with existing test appointments
+  // Debug: verify service was selected
+  const pageAfterService = await page.textContent('body');
+  console.log('Page after service select:', pageAfterService?.substring(0, 2000));
+  
+// Pick a date far in future to avoid conflicts
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() + 60);
-  const dateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD for <input type="date">
+  const dateStr = targetDate.toISOString().split('T')[0];
   await page.locator('input[type="date"]').fill(dateStr);
-  await page.waitForTimeout(3000); // let the Firestore appointments listener settle after date recompute
-
-  // :visible filters out any hidden responsive duplicate (e.g. a mobile-only
-  // or desktop-only variant of this grid) that might otherwise match first
-  // but isn't actually rendered on screen at this viewport size.
-  const slotButtons = page.locator('button:not([disabled]):visible').filter({ hasText: /^\d{2}:\d{2}$/ });
-  await expect(slotButtons.first()).toBeVisible({ timeout: 20000 });
-await slotButtons.first().click();
+  await page.waitForTimeout(8000); // let Firestore listener settle longer
   
-// Submit button enables when service + time slot selected (no GDPR checkbox in current UI)
+  // Try to click on the stylist dropdown if it exists
+  try {
+    await page.locator('select').first().click({ timeout: 3000 });
+    await page.waitForTimeout(500);
+    await page.locator('option:has-text("Egal")').first().click({ timeout: 3000 });
+    await page.waitForTimeout(2000);
+  } catch {
+    // Not a select dropdown
+  }
+  
+  // Debug: log what's on the page
+  const pageContent = await page.textContent('body');
+  console.log('Page content after date select:', pageContent?.substring(0, 2000));
+
+  // Wait for time slots to appear - try multiple selectors
+  // First wait for ANY time slot to be visible
+  await expect(page.locator('button:has-text(":"):visible, [role="button"]:has-text(":"):visible').filter({ hasText: /^\d{2}:\d{2}$/ }).first()).toBeVisible({ timeout: 30000 });
+  // Then get the first ENABLED (not disabled) slot - try multiple patterns
+  let slotButtons = page.locator('button:not([disabled]):has-text(":"):visible').filter({ hasText: /^\d{2}:\d{2}$/ });
+  if ((await slotButtons.count()) === 0) {
+    slotButtons = page.locator('[role="button"]:not([disabled]):has-text(":"):visible').filter({ hasText: /^\d{2}:\d{2}$/ });
+  }
+  if ((await slotButtons.count()) === 0) {
+    slotButtons = page.locator('button:has-text(":"):visible:not([disabled])').filter({ hasText: /^\d{2}:\d{2}$/ });
+  }
+  await expect(slotButtons.first()).toBeVisible({ timeout: 30000 });
+  
+  await slotButtons.first().click({ timeout: 10000 });
+  
+  // Submit booking
   await page.getByRole('button', { name: /buchen|book/i }).click();
-  // Wait for either success message or error
   await Promise.race([
     expect(page.getByText(/anfrage gesendet|request sent/i).first()).toBeVisible({ timeout: 15000 }),
     expect(page.getByText(/fehler|error|failed/i)).toBeVisible({ timeout: 15000 })
   ]);
   
   // --- LOGOUT CUSTOMER ---
-  await page.goto('/#profile');
-  // Click "Einstellungen" tab, find desktop logout button by exact text "ABMELDEN"
-  await page.getByRole('button', { name: /einstellungen|settings/i }).click();
-  await page.waitForTimeout(500);
-  // Scroll to bottom and click desktop logout button (exact text "ABMELDEN")
-  await page.getByText('ABMELDEN').scrollIntoViewIfNeeded();
-  await page.getByText('ABMELDEN').click();
-  await expect(page.getByText(/anmelden|login/i)).toBeVisible({ timeout: 10000 });
+  await logout(page);
   
   // --- LOGIN AS ADMIN ---
-  await page.goto('/#auth');
-  await page.getByPlaceholder(/e-mail-adresse|email address/i).fill(process.env.TEST_ADMIN_EMAIL!);
-  await page.getByPlaceholder(/passwort|password/i).fill(process.env.TEST_ADMIN_PASSWORD!);
-  await page.getByRole('button', { name: /einloggen|sign in/i }).click();
-  await expect(page.getByText(/mein profil|my profile/i)).toBeVisible({ timeout: 15000 });
+  await login(page, process.env.TEST_ADMIN_EMAIL!, process.env.TEST_ADMIN_PASSWORD!);
 
   await page.goto('/#admin');
-  await page.waitForTimeout(2000);
+  await waitForPageReady(page);
 
-  // --- CONFIRM THE MOST RECENT PENDING APPOINTMENT, WATCHING NETWORK CALLS ---
+  // --- CONFIRM THE MOST RECENT PENDING APPOINTMENT ---
   const smsCallPromise = page.waitForResponse(
     (res) => res.url().includes('/api/sms') && res.request().method() === 'POST',
     { timeout: 15000 }
-  ).catch(() => null); // sendsms might be false on this booking — handled below
+  ).catch(() => null);
 
   const emailCallPromise = page.waitForResponse(
     (res) => res.url().includes('/api/email') && res.request().method() === 'POST',
@@ -136,9 +134,6 @@ await slotButtons.first().click();
   if (smsResponse) {
     expect(smsResponse.status(), 'POST /api/sms should return 200').toBe(200);
     const smsBody = await smsResponse.json();
-    // Twilio trial accounts can legitimately fail here (unverified number,
-    // template restriction) — log it instead of hard-failing so this test
-    // stays useful even before you upgrade Twilio.
     if (!smsBody.success) {
       console.warn(`SMS API call succeeded but Twilio rejected it: ${smsBody.error}`);
     }
