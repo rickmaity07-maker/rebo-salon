@@ -10,7 +10,7 @@ import { DeleteAccountButton, AccountDeletionModal } from '@/components/AccountD
 import { ProfileView } from '@/components/ProfileView';
 import { Navbar } from '@/components/Navbar';
 import { getInternalHeaders } from '@/lib/validation';
-import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot, UserProfile, WaitlistItem } from '@/context/AppContext';
+import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot, UserProfile, WaitlistItem, StylistItem } from '@/context/AppContext';
 
 const countryCodes = [
   { code: '+49', label: 'Deutschland 🇩🇪' }, { code: '+43', label: 'Österreich 🇦🇹' }, { code: '+41', label: 'Schweiz 🇨🇭' },
@@ -382,7 +382,7 @@ function ProfileViewLocal() {
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
       {showForcePasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className="p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 bg-[#111] border-white/20">
             <h3 className="text-2xl font-bold mb-2 uppercase text-red-400">{secTrans.title}</h3>
             <p className="text-gray-400 text-sm mb-6 leading-relaxed">{secTrans.desc}</p>
@@ -585,8 +585,8 @@ function ProfileViewLocal() {
 
 // --- ADMIN DASHBOARD (CRUD & CALENDAR) ---
 function AdminView() {
-  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock, t, usersDB, updateUserNotes, addAdminAppointment, waitlist, notifyWaitlist, removeFromWaitlist, resendConfirmation } = useApp();
-  const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products' | 'clients' | 'waitlist'>('appointments');
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock, t, usersDB, updateUserNotes, addAdminAppointment, waitlist, notifyWaitlist, removeFromWaitlist, resendConfirmation, stylistsDB, addStylist, deleteStylist, generalSettings, updateGeneralSettings } = useApp();
+  const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products' | 'clients' | 'waitlist' | 'team' | 'settings'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
   const [editingClientNotes, setEditingClientNotes] = useState<{[key:string]: string}>({});
   const [searchClient, setSearchClient] = useState('');
@@ -611,7 +611,7 @@ function AdminView() {
   const [productDescDe, setProductDescDe] = useState('');
   const [productDescEn, setProductDescEn] = useState('');
   const [productPrice, setProductPrice] = useState('');
-  const [productStock, setProductStock] = useState('10'); // New Stock State
+  const [productStock, setProductStock] = useState('10');
   const [productImage, setProductImage] = useState<File | null>(null);
   const [isTranslatingProduct, setIsTranslatingProduct] = useState(false);
 
@@ -621,6 +621,16 @@ function AdminView() {
   const [walkInName, setWalkInName] = useState('');
   const [walkInService, setWalkInService] = useState('Walk-In');
   const [walkInDuration, setWalkInDuration] = useState('60');
+
+  // Phase 4 Dynamic Admin States
+  const [stylistName, setStylistName] = useState('');
+  const [stylistServices, setStylistServices] = useState<string[]>([]);
+  const [walkinWaitTimeInput, setWalkinWaitTimeInput] = useState('');
+  const [holidayInput, setHolidayInput] = useState('');
+
+  useEffect(() => {
+     setWalkinWaitTimeInput(generalSettings?.walkinWaitTime || '');
+  }, [generalSettings?.walkinWaitTime]);
 
   const primaryColor = 'text-[#d4af37]';
   const bgBorder = 'border-white/10 bg-[#111]';
@@ -706,6 +716,14 @@ function AdminView() {
     setShowWalkInModal(false); setWalkInName(''); setWalkInService('Walk-In'); setWalkInDuration('60');
   };
 
+  const handleAddStylistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stylistName) return;
+    await addStylist({ name: stylistName, services: stylistServices });
+    setStylistName('');
+    setStylistServices([]);
+  };
+
   return (
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
@@ -742,7 +760,6 @@ function AdminView() {
         <button onClick={() => { setWalkInTime('12:00'); setShowWalkInModal(true); }} className="bg-[#d4af37] text-black px-4 py-2 font-bold uppercase text-xs rounded-sm tracking-widest hover:bg-white transition-colors">{t.admin?.walkIn?.btn || '+ Walk-In'}</button>
       </div>
 
-      {/* PHASE 2: Analytics Dashboard */}
       <div className="grid grid-cols-3 gap-3 md:gap-4 mb-8">
          <div className="p-4 md:p-5 border border-white/10 rounded-sm bg-black/40">
             <p className="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest">{t.admin?.analytics?.revenue || 'Umsatz Heute'}</p>
@@ -763,9 +780,11 @@ function AdminView() {
           { id: 'appointments', label: t.admin?.tabs?.requests || 'Anfragen' },
           { id: 'calendar', label: t.admin?.tabs?.calendar || 'Kalender' },
           { id: 'clients', label: t.admin?.tabs?.clients || 'Kunden' },
-          { id: 'waitlist', label: t.admin?.tabs?.waitlist || 'Warteliste' }, // Phase 3 Waitlist Tab
+          { id: 'waitlist', label: t.admin?.tabs?.waitlist || 'Warteliste' },
           { id: 'services', label: t.admin?.tabs?.services || 'Leistungen' },
-          { id: 'products', label: t.admin?.tabs?.products || 'Produkte' }
+          { id: 'products', label: t.admin?.tabs?.products || 'Produkte' },
+          { id: 'team', label: t.admin?.tabs?.team || 'Team' },
+          { id: 'settings', label: t.admin?.tabs?.settings || 'Einstellungen' }
         ].map((tb) => (
           <button key={tb.id} onClick={() => setTab(tb.id as any)} className={`px-5 py-3 uppercase tracking-widest text-[10px] md:text-xs font-bold rounded-sm transition-colors whitespace-nowrap ${tab === tb.id ? 'bg-[#d4af37] text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
             {tb.label} {tb.id === 'appointments' && pendingAppts.length > 0 && <span className="ml-2 bg-red-500 text-white px-2 py-0.5 rounded-full">{pendingAppts.length}</span>}
@@ -773,7 +792,85 @@ function AdminView() {
         ))}
       </div>
 
-      {/* PHASE 3: Waitlist Tab View */}
+      {tab === 'team' && (
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div className={`p-6 border rounded-sm ${bgBorder}`}>
+              <h3 className="text-lg font-bold mb-4">{t.admin?.team?.title || 'Team & Stylisten'}</h3>
+              <form onSubmit={handleAddStylistSubmit} className="space-y-4">
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.team?.name || 'Name des Stylisten'}</label>
+                   <input required value={stylistName} onChange={e=>setStylistName(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-4 rounded-sm text-white text-sm" />
+                 </div>
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-3">{t.admin?.team?.services || 'Spezialisierungen (Leistungen)'}</label>
+                   <div className="max-h-48 overflow-y-auto pr-2 border border-white/10 p-3 bg-black/50 rounded-sm custom-scrollbar space-y-2">
+                     {servicesDB.map((s: ServiceItem) => (
+                        <label key={s.id} className="flex items-center gap-3 cursor-pointer">
+                           <input type="checkbox" checked={stylistServices.includes(s.name)} onChange={(e) => {
+                              if (e.target.checked) setStylistServices([...stylistServices, s.name]);
+                              else setStylistServices(stylistServices.filter(n => n !== s.name));
+                           }} className="accent-[#d4af37] w-4 h-4" />
+                           <span className="text-sm">{s.name}</span>
+                        </label>
+                     ))}
+                   </div>
+                 </div>
+                 <button type="submit" className="w-full py-4 font-bold uppercase text-sm text-black rounded-sm bg-[#d4af37]">{t.admin?.team?.saveBtn || 'Stylist speichern'}</button>
+              </form>
+            </div>
+            <div className="space-y-3">
+               {stylistsDB.map(s => (
+                  <div key={s.id} className={`p-5 flex justify-between items-center border rounded-sm ${bgBorder}`}>
+                    <div>
+                      <p className="font-bold text-lg text-[#d4af37]">{s.name}</p>
+                      <p className="text-xs text-gray-400 mt-1">{s.services.length > 0 ? s.services.join(', ') : 'Alle Leistungen'}</p>
+                    </div>
+                    <button onClick={() => deleteStylist(s.id)} className="text-red-400 text-xs uppercase font-bold hover:underline">{t.admin?.team?.deleteBtn || 'Löschen'}</button>
+                  </div>
+               ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'settings' && (
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div className={`p-6 border rounded-sm ${bgBorder}`}>
+              <h3 className="text-lg font-bold mb-4">{t.admin?.settings?.title || 'Allgemeine Einstellungen'}</h3>
+              
+              <div className="mb-8">
+                <label className="block text-xs uppercase text-gray-400 mb-2">{t.admin?.settings?.walkin || 'Live-Wartezeit für Walk-ins'}</label>
+                <div className="flex gap-2">
+                  <input value={walkinWaitTimeInput} onChange={e=>setWalkinWaitTimeInput(e.target.value)} type="text" placeholder={t.admin?.settings?.walkinPlaceholder || 'z.B. ca. 30 Minuten, Ausgebucht...'} className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                  <button onClick={() => updateGeneralSettings({ walkinWaitTime: walkinWaitTimeInput })} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-[#d4af37] text-black hover:bg-white transition-colors">{t.admin?.settings?.saveWalkin || 'Update'}</button>
+                </div>
+              </div>
+
+              <div>
+                 <h4 className="text-md font-bold mb-3 text-red-400">{t.admin?.settings?.holidays || 'Geschlossene Tage (Urlaub / Feiertage)'}</h4>
+                 <div className="flex gap-2 mb-4">
+                    <input type="date" value={holidayInput} onChange={e=>setHolidayInput(e.target.value)} className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                    <button onClick={() => { 
+                       if(holidayInput && !generalSettings.holidays.includes(holidayInput)) {
+                          updateGeneralSettings({ holidays: [...generalSettings.holidays, holidayInput] });
+                          setHolidayInput('');
+                       }
+                    }} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-white/10 text-white hover:bg-white hover:text-black transition-colors">{t.admin?.settings?.addHoliday || 'Blockieren'}</button>
+                 </div>
+                 <div className="space-y-2">
+                    {generalSettings.holidays.sort().map(h => (
+                       <div key={h} className="flex justify-between items-center p-3 bg-black/40 border border-white/10 rounded-sm">
+                          <span className="font-bold text-white">{h}</span>
+                          <button onClick={() => updateGeneralSettings({ holidays: generalSettings.holidays.filter(day => day !== h) })} className="text-red-400 text-xs font-bold uppercase hover:underline">X</button>
+                       </div>
+                    ))}
+                    {generalSettings.holidays.length === 0 && <p className="text-xs text-gray-500 italic">Keine Feiertage konfiguriert.</p>}
+                 </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
       {tab === 'waitlist' && (
         <div className={`p-6 border rounded-sm ${bgBorder}`}>
           <h3 className="text-lg font-bold mb-6">{t.admin?.waitlist?.title || 'Warteliste'}</h3>
@@ -803,7 +900,6 @@ function AdminView() {
              <input type="text" placeholder={t.admin?.clients?.search || 'Kunde nach Name oder Telefon suchen...'} onChange={(e) => setSearchClient(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white text-sm" />
            </div>
            <div className="space-y-4">
-             {/* THE FILTER FIX IS APPLIED HERE */}
              {usersDB.filter(u => (u.name || '').toLowerCase().includes((searchClient || '').toLowerCase()) || (u.phone || '').includes(searchClient)).map(u => (
                 <div key={u.id} className="p-5 border border-white/10 rounded-sm bg-black/40">
                    <div className="flex justify-between items-start mb-4">
@@ -831,7 +927,7 @@ function AdminView() {
            
            {/* Stylist Tabs inside Calendar */}
            <div className="flex gap-2 mb-6 overflow-x-auto custom-scrollbar">
-             {[t.admin?.calendar?.allStylists || 'Alle Stylisten', 'Rebo (Inhaber)', 'Anna', 'Marcus'].map(opt => (
+             {[t.admin?.calendar?.allStylists || 'Alle Stylisten', ...(stylistsDB.length > 0 ? stylistsDB.map(s => s.name) : ['Rebo (Inhaber)', 'Anna', 'Marcus'])].map(opt => (
                 <button 
                   key={opt} 
                   onClick={() => setCalendarStylist(opt)} 
@@ -1067,7 +1163,6 @@ function AdminView() {
                   <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.price || 'Preis (€)'}</label>
                   <input required value={productPrice} onChange={e => setProductPrice(e.target.value)} type="text" placeholder="19,90 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
                 </div>
-                {/* PHASE 2: New Stock Input field */}
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.initialStock || 'Anfangsbestand'}</label>
                   <input required value={productStock} onChange={e => setProductStock(e.target.value)} type="number" placeholder="10" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
@@ -1109,7 +1204,7 @@ function AdminView() {
 
 // --- PUBLIC BOOKING VIEW ---
 function BookingView() {
-  const { t, currentUser, addAppointment, servicesDB, getAvailableSlots, addNotification, addToWaitlist } = useApp();
+  const { t, currentUser, addAppointment, servicesDB, getAvailableSlots, addNotification, addToWaitlist, stylistsDB } = useApp();
   const addAppointmentTyped = addAppointment as (appt: Omit<Appointment, 'id'>) => Promise<import('firebase/firestore').DocumentReference | undefined>;
   const [submitted, setSubmitted] = useState(false);
   
@@ -1120,13 +1215,22 @@ function BookingView() {
   const [selectedServices, setSelectedServices] = useState<ServiceItem[]>([]);
   const [bookingDate, setBookingDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
-  const [stylist, setStylist] = useState("Egal (Wer frei ist)");
+  const [stylist, setStylist] = useState(t.booking?.stylistAny || "Egal (Wer frei ist)");
   const [specialRequests, setSpecialRequests] = useState("");
   const [refImageFile, setRefImageFile] = useState<File | null>(null);
   const [refImagePreview, setRefImagePreview] = useState<string | null>(null);
   
   const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMins || 60), 0);
   const openSlots = getAvailableSlots(bookingDate, stylist, totalDuration);
+
+  // Dynamic Stylist Filtering
+  const availableStylists = stylistsDB && stylistsDB.length > 0 
+      ? [t.booking?.stylistAny || "Egal (Wer frei ist)", ...stylistsDB.filter(s => {
+          if (selectedServices.length === 0) return true;
+          if (!s.services || s.services.length === 0) return true;
+          return selectedServices.every(srv => s.services.includes(srv.name));
+        }).map(s => s.name)]
+      : t.booking.stylistOptions;
 
   useEffect(() => {
     if (currentUser) {
@@ -1274,7 +1378,7 @@ function BookingView() {
                 <div>
                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking.stylist}</label>
                   <select value={stylist} onChange={e=>{setStylist(e.target.value); setSelectedSlot("");}} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white">
-                    {t.booking.stylistOptions.map((opt: string, i: number) => <option key={i} value={opt}>{opt}</option>)}
+                    {availableStylists.map((opt: string, i: number) => <option key={i} value={opt}>{opt}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1419,7 +1523,7 @@ function ContactView() {
 
 // --- MAIN WRAPPER ---
 function MainContent() {
-  const { page, setPage, t, servicesDB, productsDB, currentUser } = useApp();
+  const { page, setPage, t, servicesDB, productsDB, currentUser, generalSettings } = useApp();
 
   return (
     <div className="relative min-h-screen flex flex-col bg-[#0a0a0a] text-white">
@@ -1457,7 +1561,7 @@ function MainContent() {
                 <h1 className="text-4xl sm:text-6xl md:text-8xl font-extrabold tracking-tighter mb-6 leading-tight uppercase">{t.hero.title}</h1>
                 <p className="text-base md:text-2xl text-gray-300 font-light mb-4 max-w-2xl mx-auto">{t.hero.sub}</p>
                 <p className="text-[#d4af37] text-xs md:text-sm font-bold tracking-widest uppercase mb-8 max-w-2xl mx-auto">
-                  {t.hero.walkin || "Ohne Termin möglich (Wartezeit bis zu 30 Minuten)"}
+                  {t.hero.walkin} {generalSettings?.walkinWaitTime || "ca. 30 Minuten"}{t.hero.walkinSuffix}
                 </p>
                 <button onClick={() => setPage('booking')} className="bg-[#d4af37] text-black px-8 md:px-10 py-3.5 md:py-4 font-bold uppercase tracking-widest text-xs md:text-sm hover:bg-white transition-all shadow-[0_0_30px_rgba(212,175,55,0.2)]">{t.nav.book}</button>
               </div>

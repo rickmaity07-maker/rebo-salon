@@ -20,8 +20,11 @@ export type Appointment = {
   specialRequests?: string;
 };
 
-// Phase 3: Waitlist Type
 export type WaitlistItem = { id: string; userId: string; name: string; phone: string; date: string; stylist: string; createdAt: number; };
+
+// Phase 4 Dynamic Management Types
+export type StylistItem = { id: string; name: string; services: string[] };
+export type GeneralSettings = { walkinWaitTime: string; holidays: string[] };
 
 export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
 export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string; durationMins: number };
@@ -58,7 +61,9 @@ export interface AppContextType {
   servicesDB: ServiceItem[]; addService: (s: Omit<ServiceItem, 'id'>) => Promise<void>; deleteService: (id: string) => Promise<void>;
   productsDB: ProductItem[]; addProduct: (p: Omit<ProductItem, 'id'>) => Promise<void>; deleteProduct: (id: string) => Promise<void>;
   updateProductStock: (id: string, newStock: number) => Promise<void>;
-  // Phase 3 Actions
+  // Phase 4 Dynamic Actions
+  stylistsDB: StylistItem[]; addStylist: (s: Omit<StylistItem, 'id'>) => Promise<void>; deleteStylist: (id: string) => Promise<void>;
+  generalSettings: GeneralSettings; updateGeneralSettings: (settings: Partial<GeneralSettings>) => Promise<void>;
   waitlist: WaitlistItem[]; addToWaitlist: (item: Omit<WaitlistItem, 'id' | 'createdAt'>) => Promise<void>; removeFromWaitlist: (id: string) => Promise<void>; notifyWaitlist: (item: WaitlistItem) => Promise<void>; resendConfirmation: (id: string) => Promise<void>;
   notifications: Notification[]; addNotification: (msg: string, type?: 'success' | 'info' | 'error') => void;
   alerts: Alert[]; markAlertRead: (id: string) => Promise<void>; clearAlerts: () => Promise<void>;
@@ -69,7 +74,7 @@ export const fallbackTranslations: TranslationData = {
   de: { 
     common: { loading: "Lädt...", searchLang: "Sprache suchen...", noResults: "Keine gefunden.", footer: "Alle Rechte vorbehalten.", design: "Design", at: "um", by: "bei" },
     nav: { home: "Startseite", services: "Leistungen", gallery: "Galerie", products: "Produkte", contact: "Kontakt", book: "Termin buchen", profile: "Profil", logout: "Abmelden", admin: "Admin Panel" }, 
-    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt.", walkin: "Ohne Termin möglich (Wartezeit bis zu 30 Minuten)" }, 
+    hero: { title: "Dein Stil. Deine Zeit.", sub: "Präzision & Handwerk in Schweinfurt.", walkin: "Ohne Termin möglich (Wartezeit", walkinSuffix: ")" }, 
     about: { title: "Über Uns", text: "Willkommen im Rebo Salon." }, 
     services: { title: "Unsere Leistungen", subtitle: "Goldenes Angebot Jeden Dienstag", min: "Minuten" }, 
     gallery: { title: "Unsere Arbeit", subtitle: "Einblicke in unseren Salon", images: [
@@ -81,17 +86,17 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
     contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?", passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark", ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen" }, 
-    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], requestsLabel: "Besondere Wünsche / Notizen (Optional)", date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen", waitlistLabel: "Kein passender Termin?", joinWaitlistBtn: "Warteliste beitreten" }, 
+    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistAny: "Egal (Wer frei ist)", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], requestsLabel: "Besondere Wünsche / Notizen (Optional)", date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen", waitlistLabel: "Kein passender Termin?", joinWaitlistBtn: "Warteliste beitreten" }, 
     profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern", welcome: "Willkommen zurück", overview: "Übersicht", settings: "Einstellungen", editProfile: "Profil bearbeiten", contactData: "Kontaktdaten", noPhone: "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen.", acceptTime: "Zeit Akzeptieren", cancel: "Stornieren", pending: "Ausstehend", completed: "Abgeschlossen", newProposal: "Neuer Terminvorschlag vom Salon:" }, 
     notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
     security: { title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden" },
-    admin: { title: "Admin Control Panel", analytics: { revenue: "Umsatz Heute", completed: "Bestätigt (Heute)", upcoming: "Ausstehend (Heute)" }, tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte", clients: "Kunden", waitlist: "Warteliste" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot", allStylists: "Alle Stylisten", blockBtn: "Blockieren", unblockBtn: "Freigeben" }, walkIn: { title: "Walk-In / Termin Hinzufügen", name: "Kundenname", service: "Leistung / Info", duration: "Dauer (Min)", saveBtn: "Speichern", cancel: "Abbrechen", btn: "+ Walk-In" }, clients: { search: "Kunde nach Name oder Telefon suchen...", notes: "Stylisten-Notizen (z.B. Haarfarbe, Formel...)", saveNotes: "Notizen speichern" }, waitlist: { title: "Warteliste", empty: "Warteliste ist leer.", notifyBtn: "Kunde Benachrichtigen", removeBtn: "Entfernen" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status", resendBtn: "Bestätigung neu senden" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", initialStock: "Anfangsbestand", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern", stockLabel: "Bestand" } },
+    admin: { title: "Admin Control Panel", analytics: { revenue: "Umsatz Heute", completed: "Bestätigt (Heute)", upcoming: "Ausstehend (Heute)" }, tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte", clients: "Kunden", waitlist: "Warteliste", team: "Team", settings: "Einstellungen" }, team: { title: "Team & Stylisten", name: "Name des Stylisten", services: "Spezialisierungen (Leistungen)", saveBtn: "Stylist speichern", deleteBtn: "Löschen" }, settings: { title: "Allgemeine Einstellungen", walkin: "Live-Wartezeit für Walk-ins", walkinPlaceholder: "z.B. ca. 30 Minuten, Ausgebucht...", saveWalkin: "Wartezeit updaten", holidays: "Geschlossene Tage (Urlaub / Feiertage)", holidayDate: "Datum auswählen", addHoliday: "Tag blockieren" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot", allStylists: "Alle Stylisten", blockBtn: "Blockieren", unblockBtn: "Freigeben" }, walkIn: { title: "Walk-In / Termin Hinzufügen", name: "Kundenname", service: "Leistung / Info", duration: "Dauer (Min)", saveBtn: "Speichern", cancel: "Abbrechen", btn: "+ Walk-In" }, clients: { search: "Kunde nach Name oder Telefon suchen...", notes: "Stylisten-Notizen (z.B. Haarfarbe, Formel...)", saveNotes: "Notizen speichern" }, waitlist: { title: "Warteliste", empty: "Warteliste ist leer.", notifyBtn: "Kunde Benachrichtigen", removeBtn: "Entfernen" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status", resendBtn: "Bestätigung neu senden" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", initialStock: "Anfangsbestand", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern", stockLabel: "Bestand" } },
     alertsMsg: { confirmed1: "Dein Termin am", confirmed2: "Uhr wurde bestätigt!", cancelled1: "Dein Termin am", cancelled2: "wurde leider storniert.", proposed1: "Neuer Termin-Vorschlag:", proposed2: "Bitte bestätigen!" }
   },
   en: { 
     common: { loading: "Loading...", searchLang: "Search language...", noResults: "None found.", footer: "All rights reserved.", design: "Design", at: "at", by: "with" },
     nav: { home: "Home", services: "Services", gallery: "Gallery", products: "Products", contact: "Contact", book: "Book Now", profile: "Profile", logout: "Log Out", admin: "Admin Panel" }, 
-    hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt.", walkin: "Walk-in possible (Waiting time up to 30 minutes)" }, 
+    hero: { title: "Your Style. Your Time.", sub: "Precision & Craft in Schweinfurt.", walkin: "Walk-in possible (Waiting time", walkinSuffix: ")" }, 
     about: { title: "About Us", text: "Welcome to Rebo Salon." }, 
     services: { title: "Our Services", subtitle: "Golden Offer Every Tuesday", min: "minutes" }, 
     gallery: { title: "Our Work", subtitle: "Inside the salon", images: [
@@ -103,11 +108,11 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Products", subtitle: "Professional care for home" }, 
     contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?", passStrength: "Password Strength:", weak: "Weak", medium: "Medium", strong: "Strong", ruleLength: "At least 8 characters", ruleUpper: "One uppercase letter", ruleLower: "One lowercase letter", ruleNum: "One number", ruleSpec: "One special character" }, 
-    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], requestsLabel: "Special Requests / Notes (Optional)", date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment", waitlistLabel: "No suitable time?", joinWaitlistBtn: "Join Waitlist" }, 
+    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistAny: "Any (First Available)", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], requestsLabel: "Special Requests / Notes (Optional)", date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment", waitlistLabel: "No suitable time?", joinWaitlistBtn: "Join Waitlist" }, 
     profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note", welcome: "Welcome back", overview: "Overview", settings: "Settings", editProfile: "Edit Profile", contactData: "Contact Data", noPhone: "No phone number saved. Please add in settings.", acceptTime: "Accept Time", cancel: "Cancel", pending: "Pending", completed: "Completed", newProposal: "New appointment proposal from salon:" }, 
     notifications: { title: "Notifications", empty: "No notifications.", clearAll: "Clear All" },
     security: { title: "Security Update", desc: "We updated our security standards. Please change your password to continue.", currentPass: "Current Password", newPass: "New Password", confirmPass: "Confirm New Password", sendCode: "Send code via E-Mail", enterCode: "E-Mail verification code", cancel: "Cancel", confirmBtn: "Confirm & Change", secTitle: "Password & Security", oauthMsg: "You are logged in via a third party (Google/Facebook). Password changes are not available here.", sendOtpBtn: "Send OTP via E-Mail" },
-    admin: { title: "Admin Control Panel", analytics: { revenue: "Today's Revenue", completed: "Confirmed (Today)", upcoming: "Pending (Today)" }, tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products", clients: "Clients", waitlist: "Waitlist" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot", allStylists: "All Stylists", blockBtn: "Block", unblockBtn: "Unblock" }, walkIn: { title: "Add Walk-In / Appointment", name: "Client Name", service: "Service / Info", duration: "Duration (Min)", saveBtn: "Save", cancel: "Cancel", btn: "+ Walk-In" }, clients: { search: "Search client by name or phone...", notes: "Stylist Notes (e.g. formula, allergies...)", saveNotes: "Save Notes" }, waitlist: { title: "Waitlist", empty: "Waitlist is empty.", notifyBtn: "Notify Client", removeBtn: "Remove" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status", resendBtn: "Resend Confirm" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", initialStock: "Initial Stock", uploadImg: "Upload Product Image", saveBtn: "Save Product", stockLabel: "Stock" } },
+    admin: { title: "Admin Control Panel", analytics: { revenue: "Today's Revenue", completed: "Confirmed (Today)", upcoming: "Pending (Today)" }, tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products", clients: "Clients", waitlist: "Waitlist", team: "Team", settings: "Settings" }, team: { title: "Team & Stylists", name: "Stylist Name", services: "Specialties (Services)", saveBtn: "Save Stylist", deleteBtn: "Delete" }, settings: { title: "General Settings", walkin: "Live Walk-in Wait Time", walkinPlaceholder: "e.g. 15 Minutes, Fully Booked...", saveWalkin: "Update Wait Time", holidays: "Closed Dates (Holidays)", holidayDate: "Select Date", addHoliday: "Block Date" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot", allStylists: "All Stylists", blockBtn: "Block", unblockBtn: "Unblock" }, walkIn: { title: "Add Walk-In / Appointment", name: "Client Name", service: "Service / Info", duration: "Duration (Min)", saveBtn: "Save", cancel: "Cancel", btn: "+ Walk-In" }, clients: { search: "Search client by name or phone...", notes: "Stylist Notes (e.g. formula, allergies...)", saveNotes: "Save Notes" }, waitlist: { title: "Waitlist", empty: "Waitlist is empty.", notifyBtn: "Notify Client", removeBtn: "Remove" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status", resendBtn: "Resend Confirm" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", initialStock: "Initial Stock", uploadImg: "Upload Product Image", saveBtn: "Save Product", stockLabel: "Stock" } },
     alertsMsg: { confirmed1: "Your appointment on", confirmed2: "has been confirmed!", cancelled1: "Your appointment on", cancelled2: "has been cancelled.", proposed1: "New appointment proposal:", proposed2: "Please confirm!" }
   }
 };
@@ -129,9 +134,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  
-  // Phase 3 Waitlist State
   const [waitlist, setWaitlist] = useState<WaitlistItem[]>([]);
+  
+  // Phase 4 Dynamic State
+  const [stylistsDB, setStylistsDB] = useState<StylistItem[]>([]);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({ walkinWaitTime: 'ca. 30 Minuten', holidays: [] });
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
   
@@ -248,16 +255,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubProd = onSnapshot(collection(db, 'products'), (snap) => {
       setProductsDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProductItem)));
     });
+    
+    // Phase 4 Dynamic Listeners
+    const unsubStylists = onSnapshot(collection(db, 'stylists'), (snap) => {
+      setStylistsDB(snap.docs.map(d => ({ id: d.id, ...d.data() } as StylistItem)));
+    });
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
+      if (snap.exists()) setGeneralSettings({ walkinWaitTime: 'ca. 30 Minuten', holidays: [], ...snap.data() });
+    });
 
     return () => { 
-      unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); 
+      unsubAuth(); unsubTrans(); unsubSrv(); unsubProd(); unsubStylists(); unsubSettings();
       if (unsubAppts) unsubAppts(); 
       if (unsubAlerts) unsubAlerts(); 
       if (unsubUser) unsubUser(); 
     };
   }, []);
 
-  // Securely scoped Admin-only listeners
   useEffect(() => {
     let unsubUsersDB: (() => void) | null = null;
     let unsubWaitlist: (() => void) | null = null;
@@ -319,16 +333,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getAvailableSlots = (date: string, stylist: string, requiredDuration: number = 60) => {
     if (!date) return initialSlots.map(s => ({ ...s, isBooked: false }));
     
-    const realStylists = ["Rebo (Inhaber)", "Anna", "Marcus"];
+    // Phase 4: Block Global Holidays Automatically
+    if (generalSettings.holidays && generalSettings.holidays.includes(date)) {
+        return initialSlots.map(s => ({ ...s, isBooked: true }));
+    }
+
+    const realStylists = stylistsDB.length > 0 ? stylistsDB.map(s => s.name) : ["Rebo (Inhaber)", "Anna", "Marcus"];
 
     return initialSlots.map(slot => {
       const slotMins = timeToMins(slot.time);
       
       let isBooked = false;
-      if (stylist && stylist !== 'Egal (Wer frei ist)' && stylist !== 'Any') {
+      if (stylist && stylist !== 'Egal (Wer frei ist)' && stylist !== 'Any' && stylist !== translations[lang]?.booking?.stylistAny) {
         isBooked = appointments.some(a => {
           if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed' && a.status !== 'blocked')) return false;
-          if (a.stylist !== stylist && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
+          if (a.stylist !== stylist && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any' && a.stylist !== translations[lang]?.booking?.stylistAny) return false;
           
           const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
           const aEnd = aStart + (a.totalDurationMins || 60);
@@ -343,7 +362,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         realStylists.forEach(sName => {
           const sBooked = appointments.some(a => {
             if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed' && a.status !== 'blocked')) return false;
-            if (a.stylist !== sName && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
+            if (a.stylist !== sName && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any' && a.stylist !== translations[lang]?.booking?.stylistAny) return false;
             
             const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
             const aEnd = aStart + (a.totalDurationMins || 60);
@@ -437,7 +456,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Phase 3 Waitlist Actions
   const addToWaitlist = async (item: Omit<WaitlistItem, 'id' | 'createdAt'>) => {
     await addDoc(collection(db, 'waitlist'), { ...item, createdAt: Date.now() });
     addNotification("Auf die Warteliste gesetzt!", 'success');
@@ -610,6 +628,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await updateDoc(doc(db, 'products', id), { stockCount: newStock });
   };
 
+  // Phase 4 Stylist & Settings Updates
+  const addStylist = async (s: Omit<StylistItem, 'id'>) => { await addDoc(collection(db, 'stylists'), s); addNotification("Stylist gespeichert!", 'success'); };
+  const deleteStylist = async (id: string) => { await deleteDoc(doc(db, 'stylists', id)); addNotification("Stylist entfernt.", 'info'); };
+  const updateGeneralSettings = async (settings: Partial<GeneralSettings>) => {
+    if (!isAdminAuth) return;
+    await updateDoc(doc(db, 'settings', 'general'), settings);
+    addNotification("Einstellungen gespeichert!", 'success');
+  };
+
   const t = translations[lang] || fallbackTranslations[lang] || fallbackTranslations.de;
 
   return (
@@ -619,6 +646,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock,
       appointments, addAppointment, addAdminAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots,
       waitlist, addToWaitlist, removeFromWaitlist, notifyWaitlist, resendConfirmation,
+      stylistsDB, addStylist, deleteStylist, generalSettings, updateGeneralSettings,
       alerts, markAlertRead, clearAlerts
     }}>
       {children}
