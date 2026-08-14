@@ -728,7 +728,7 @@ function AdminView() {
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
       {showWalkInModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className="p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 bg-[#111] border-white/20">
             <h3 className="text-2xl font-bold mb-6 uppercase text-[#d4af37]">{t.admin?.walkIn?.title || "Walk-In Hinzufügen"}</h3>
             <form onSubmit={handleSaveWalkIn} className="space-y-4">
@@ -1574,7 +1574,7 @@ function MainContent() {
               </div>
               <div className="flex-1 relative w-full group">
                 <div className="absolute inset-0 border-2 border-[#d4af37] translate-x-3 translate-y-3 rounded-sm" />
-                <img src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80" className="relative z-10 w-full h-auto rounded-sm object-cover aspect-[4/3] grayscale-20" alt="Salon About Image" />
+                <img src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80" className="relative z-10 w-full h-auto rounded-sm object-cover aspect-4/3rayscale-20" alt="Salon About Image" />
               </div>
             </section>
           </div>
@@ -1612,7 +1612,7 @@ function MainContent() {
             <div className="text-center mb-12 pb-8">
                <h2 className="text-3xl md:text-5xl font-bold mb-2 uppercase tracking-tight">{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[75px] md:auto-rows-[150px]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-18.75md:auto-rows-[150px]">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -1639,7 +1639,7 @@ function MainContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
                 <div key={item.id} className="rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both bg-[#111] border border-white/10" style={{ animationDelay: `${idx * 150}ms` }}>
-                  <div className="w-full aspect-square md:aspect-[4/5] overflow-hidden bg-black/50 relative group">
+                  <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
                   <div className="p-6 md:p-8 flex flex-col grow relative">
