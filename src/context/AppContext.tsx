@@ -7,22 +7,25 @@ import { doc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getD
 type Language = string;
 type Page = 'home' | 'services' | 'gallery' | 'products' | 'contact' | 'booking' | 'admin' | 'auth' | 'profile';
 
-export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string; hasUpdatedPassword?: boolean };
+export type UserProfile = { id: string; name: string; email: string; phone: string; haircutCount: number; role: 'user' | 'admin'; photoURL?: string; hasUpdatedPassword?: boolean; stylistNotes?: string; };
 
 export type Appointment = { 
   id: string; userId: string; name: string; phone: string; 
   services: string[]; totalDurationMins: number; stylist: string; 
   date: string; time: string; 
-  status: 'pending' | 'confirmed' | 'cancelled' | 'proposed'; 
+  status: 'pending' | 'confirmed' | 'cancelled' | 'proposed' | 'blocked'; 
   proposedDate?: string; proposedTime?: string;
   sendsms: boolean; usedReward: boolean; notes?: string; isEmergency?: boolean;
   referenceImage?: string; 
   specialRequests?: string;
 };
 
+// Phase 3: Waitlist Type
+export type WaitlistItem = { id: string; userId: string; name: string; phone: string; date: string; stylist: string; createdAt: number; };
+
 export type Alert = { id: string; userId: string; message: string; isRead: boolean; link: Page; createdAt: number };
 export type ServiceItem = { id: string; name: string; price: string; oldPrice?: string; durationMins: number };
-export type ProductItem = { id: string; name: string; price: string; desc: string; image: string };
+export type ProductItem = { id: string; name: string; price: string; desc: string; image: string; stockCount?: number; };
 export type Notification = { id: number; message: string; type: 'success' | 'info' | 'error' };
 export type TimeSlot = { id: string; time: string; isBooked: boolean };
 export type TranslationData = { [key: string]: { [key: string]: any } };
@@ -41,6 +44,7 @@ export interface AppContextType {
   t: any; updateTranslation: (lang: Language, section: string, key: string, val: string) => Promise<void>;
   isAdminAuth: boolean;
   currentUser: UserProfile | null; 
+  usersDB: UserProfile[]; updateUserNotes: (id: string, notes: string) => Promise<void>;
   loginOAuth: (provider: 'Google' | 'Facebook') => Promise<void>; 
   loginEmail: (email: string, pass: string) => Promise<void>;
   registerEmail: (email: string, pass: string, name: string, phone?: string) => Promise<void>;
@@ -49,9 +53,13 @@ export interface AppContextType {
   logout: () => void;
   appointments: Appointment[]; 
   addAppointment: (appt: Omit<Appointment, 'id'>) => Promise<DocumentReference | undefined>;
+  addAdminAppointment: (appt: Omit<Appointment, 'id'>) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status'], sendsms: boolean, notes?: string, proposedDate?: string, proposedTime?: string) => Promise<void>;
   servicesDB: ServiceItem[]; addService: (s: Omit<ServiceItem, 'id'>) => Promise<void>; deleteService: (id: string) => Promise<void>;
   productsDB: ProductItem[]; addProduct: (p: Omit<ProductItem, 'id'>) => Promise<void>; deleteProduct: (id: string) => Promise<void>;
+  updateProductStock: (id: string, newStock: number) => Promise<void>;
+  // Phase 3 Actions
+  waitlist: WaitlistItem[]; addToWaitlist: (item: Omit<WaitlistItem, 'id' | 'createdAt'>) => Promise<void>; removeFromWaitlist: (id: string) => Promise<void>; notifyWaitlist: (item: WaitlistItem) => Promise<void>; resendConfirmation: (id: string) => Promise<void>;
   notifications: Notification[]; addNotification: (msg: string, type?: 'success' | 'info' | 'error') => void;
   alerts: Alert[]; markAlertRead: (id: string) => Promise<void>; clearAlerts: () => Promise<void>;
   getAvailableSlots: (date: string, stylist: string, requiredDuration?: number) => TimeSlot[];
@@ -73,11 +81,11 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Produkte", subtitle: "Professionelle Pflege für Zuhause" }, 
     contact: { title: "Kontakt", subtitle: "Besuchen Sie uns", addressLabel: "Adresse", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Telefon", phone: "+49 176 42980985", hoursLabel: "Öffnungszeiten", hours: [ { days: "Montag - Samstag", time: "09:00 - 19:00 Uhr" }, { days: "Sonntag", time: "Geschlossen" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Anmelden", loginSub: "Um einen Termin zu buchen, melden Sie sich bitte an.", email: "E-Mail-Adresse", pass: "Passwort", loginBtn: "Einloggen", register: "Oder neu registrieren", social: "Mit Social Media fortfahren", noAccount: "Noch kein Konto?", haveAccount: "Bereits ein Konto?", registerTitle: "Konto erstellen", resetPassBtn: "Passwort vergessen?", passStrength: "Passwort-Stärke:", weak: "Schwach", medium: "Mittel", strong: "Stark", ruleLength: "Mindestens 8 Zeichen", ruleUpper: "Ein Großbuchstabe", ruleLower: "Ein Kleinbuchstabe", ruleNum: "Eine Zahl", ruleSpec: "Ein Sonderzeichen" }, 
-    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], requestsLabel: "Besondere Wünsche / Notizen (Optional)", date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen" }, 
+    booking: { title: "Termin buchen", subtitle: "Wählen Sie Ihren Stylisten.", quote: "Dein perfekter Look beginnt hier.", name: "Vollständiger Name", phone: "Telefon", service: "Leistung", stylist: "Stylist auswählen", stylistOptions: ["Egal (Wer frei ist)", "Rebo (Inhaber)", "Anna", "Marcus"], requestsLabel: "Besondere Wünsche / Notizen (Optional)", date: "Datum", time: "Uhrzeit", dsgvoNote: "Mit dem Absenden stimmen Sie der DSGVO zu.", smsNote: "SMS-Erinnerung 24h vor dem Termin erhalten.", reward: "Loyalty Bonus", rewardDesc: "Sie haben 10 Haarschnitte erreicht! Möchten Sie 50% Rabatt auf diesen Termin anwenden?", submit: "Kostenpflichtig Buchen", success: "Anfrage gesendet! Wir haben eine Bestätigungsmail an Sie gesendet.", refImage: "Referenzbild (Optional)", totalDuration: "Gesamtdauer:", pickDateFirst: "Wählen Sie zuerst ein Datum.", bookNew: "Neuen Termin anfragen", waitlistLabel: "Kein passender Termin?", joinWaitlistBtn: "Warteliste beitreten" }, 
     profile: { title: "Mein Profil", pointsTitle: "Ihre Treuepunkte", pointsDesc: "Sammeln Sie 10 Punkte für 50% Rabatt auf Ihren nächsten Schnitt!", historyTitle: "Ihr Besuchsverlauf", upcomingTitle: "Anstehende Termine", notesLabel: "Stylisten-Notizen:", noHistory: "Bisher keine Termine.", saveNote: "Notiz speichern", welcome: "Willkommen zurück", overview: "Übersicht", settings: "Einstellungen", editProfile: "Profil bearbeiten", contactData: "Kontaktdaten", noPhone: "Keine Telefonnummer gespeichert. Bitte in den Einstellungen hinzufügen.", acceptTime: "Zeit Akzeptieren", cancel: "Stornieren", pending: "Ausstehend", completed: "Abgeschlossen", newProposal: "Neuer Terminvorschlag vom Salon:" }, 
     notifications: { title: "Benachrichtigungen", empty: "Keine Benachrichtigungen.", clearAll: "Alle löschen" },
     security: { title: "Sicherheitsupdate", desc: "Wir haben unsere Sicherheitsstandards aktualisiert. Bitte ändern Sie Ihr Passwort, um fortzufahren.", currentPass: "Aktuelles Passwort", newPass: "Neues Passwort", confirmPass: "Neues Passwort bestätigen", sendCode: "Code via E-Mail senden", enterCode: "E-Mail Bestätigungscode", cancel: "Abbrechen", confirmBtn: "Bestätigen & Ändern", secTitle: "Passwort & Sicherheit", oauthMsg: "Sie sind über einen Drittanbieter (Google/Facebook) angemeldet. Passwortänderungen sind hier nicht verfügbar.", sendOtpBtn: "OTP per E-Mail senden" },
-    admin: { title: "Admin Control Panel", tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot", allStylists: "Alle Stylisten" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern" } },
+    admin: { title: "Admin Control Panel", analytics: { revenue: "Umsatz Heute", completed: "Bestätigt (Heute)", upcoming: "Ausstehend (Heute)" }, tabs: { requests: "Anfragen", calendar: "Kalender", services: "Leistungen", products: "Produkte", clients: "Kunden", waitlist: "Warteliste" }, calendar: { back: "Zurück", next: "Weiter", freeSlot: "Freier Slot", allStylists: "Alle Stylisten", blockBtn: "Blockieren", unblockBtn: "Freigeben" }, walkIn: { title: "Walk-In / Termin Hinzufügen", name: "Kundenname", service: "Leistung / Info", duration: "Dauer (Min)", saveBtn: "Speichern", cancel: "Abbrechen", btn: "+ Walk-In" }, clients: { search: "Kunde nach Name oder Telefon suchen...", notes: "Stylisten-Notizen (z.B. Haarfarbe, Formel...)", saveNotes: "Notizen speichern" }, waitlist: { title: "Warteliste", empty: "Warteliste ist leer.", notifyBtn: "Kunde Benachrichtigen", removeBtn: "Entfernen" }, requests: { pending: "Ausstehende Anfragen", noPending: "Keine neuen Anfragen.", services: "Leistungen:", refImage: "Referenzbild:", confirmBtn: "Bestätigen", rejectBtn: "Ablehnen", reschedule: "Termin verschieben (Neuer Vorschlag)", proposeBtn: "Vorschlagen", confirmed: "Bestätigt & Historie", notesPlaceholder: "Interne Notizen (z.B. Skin fade #1...)", saveNote: "Notiz speichern", cancelBtn: "Stornieren", move: "Verschieben:", proposeClientBtn: "Kunden Vorschlagen", status: "Status", resendBtn: "Bestätigung neu senden" }, services: { addTitle: "Leistung hinzufügen", nameDe: "Name der Leistung (Deutsch)", nameEn: "Name (Englische Vorschau)", price: "Preis (€)", duration: "Dauer (Min)", saveBtn: "In Datenbank speichern", deleteBtn: "Löschen", translateBtn: "✨ KI: Auf Englisch übersetzen", translating: "Übersetzen..." }, products: { addTitle: "Produkt hinzufügen", nameDe: "Produktname (Deutsch)", descDe: "Beschreibung (Deutsch)", nameEn: "Name (Englische Vorschau)", descEn: "Beschreibung (Englische Vorschau)", price: "Preis (€)", initialStock: "Anfangsbestand", uploadImg: "Produktbild hochladen", saveBtn: "Produkt speichern", stockLabel: "Bestand" } },
     alertsMsg: { confirmed1: "Dein Termin am", confirmed2: "Uhr wurde bestätigt!", cancelled1: "Dein Termin am", cancelled2: "wurde leider storniert.", proposed1: "Neuer Termin-Vorschlag:", proposed2: "Bitte bestätigen!" }
   },
   en: { 
@@ -95,11 +103,11 @@ export const fallbackTranslations: TranslationData = {
     products: { title: "Store & Products", subtitle: "Professional care for home" }, 
     contact: { title: "Contact Us", subtitle: "Visit us", addressLabel: "Address", address: "Manggasse 6, 97421 Schweinfurt", phoneLabel: "Phone", phone: "+49 176 42980985", hoursLabel: "Opening Hours", hours: [ { days: "Monday - Saturday", time: "9:00 AM - 7:00 PM" }, { days: "Sunday", time: "Closed" } ], socialLabel: "Social Media" }, 
     auth: { loginTitle: "Login", loginSub: "Please log in to book an appointment.", email: "Email Address", pass: "Password", loginBtn: "Sign In", register: "Or create an account", social: "Continue with Social", noAccount: "Don't have an account?", haveAccount: "Already have an account?", registerTitle: "Create Account", resetPassBtn: "Forgot Password?", passStrength: "Password Strength:", weak: "Weak", medium: "Medium", strong: "Strong", ruleLength: "At least 8 characters", ruleUpper: "One uppercase letter", ruleLower: "One lowercase letter", ruleNum: "One number", ruleSpec: "One special character" }, 
-    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], requestsLabel: "Special Requests / Notes (Optional)", date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment" }, 
+    booking: { title: "Book Appointment", subtitle: "Select your stylist.", quote: "Your perfect look begins here.", name: "Full Name", phone: "Phone", service: "Service", stylist: "Select Stylist", stylistOptions: ["Any", "Rebo (Owner)", "Anna", "Marcus"], requestsLabel: "Special Requests / Notes (Optional)", date: "Date", time: "Time", dsgvoNote: "By submitting, you agree to GDPR processing.", smsNote: "Receive SMS reminder 24h before appointment.", reward: "Loyalty Bonus", rewardDesc: "You reached 10 haircuts! Want to apply a 50% discount to this booking?", submit: "Confirm Booking", success: "Request sent! We have emailed you a confirmation receipt.", refImage: "Reference Image (Optional)", totalDuration: "Total Duration:", pickDateFirst: "Please select a date first.", bookNew: "Request new appointment", waitlistLabel: "No suitable time?", joinWaitlistBtn: "Join Waitlist" }, 
     profile: { title: "My Profile", pointsTitle: "Your Loyalty Points", pointsDesc: "Collect 10 points for 50% off your next cut!", historyTitle: "Your Visit History", upcomingTitle: "Upcoming Appointments", notesLabel: "Stylist Notes:", noHistory: "No appointments yet.", saveNote: "Save Note", welcome: "Welcome back", overview: "Overview", settings: "Settings", editProfile: "Edit Profile", contactData: "Contact Data", noPhone: "No phone number saved. Please add in settings.", acceptTime: "Accept Time", cancel: "Cancel", pending: "Pending", completed: "Completed", newProposal: "New appointment proposal from salon:" }, 
     notifications: { title: "Notifications", empty: "No notifications.", clearAll: "Clear All" },
     security: { title: "Security Update", desc: "We updated our security standards. Please change your password to continue.", currentPass: "Current Password", newPass: "New Password", confirmPass: "Confirm New Password", sendCode: "Send code via E-Mail", enterCode: "E-Mail verification code", cancel: "Cancel", confirmBtn: "Confirm & Change", secTitle: "Password & Security", oauthMsg: "You are logged in via a third party (Google/Facebook). Password changes are not available here.", sendOtpBtn: "Send OTP via E-Mail" },
-    admin: { title: "Admin Control Panel", tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot", allStylists: "All Stylists" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", uploadImg: "Upload Product Image", saveBtn: "Save Product" } },
+    admin: { title: "Admin Control Panel", analytics: { revenue: "Today's Revenue", completed: "Confirmed (Today)", upcoming: "Pending (Today)" }, tabs: { requests: "Requests", calendar: "Calendar", services: "Services", products: "Products", clients: "Clients", waitlist: "Waitlist" }, calendar: { back: "Back", next: "Next", freeSlot: "Free Slot", allStylists: "All Stylists", blockBtn: "Block", unblockBtn: "Unblock" }, walkIn: { title: "Add Walk-In / Appointment", name: "Client Name", service: "Service / Info", duration: "Duration (Min)", saveBtn: "Save", cancel: "Cancel", btn: "+ Walk-In" }, clients: { search: "Search client by name or phone...", notes: "Stylist Notes (e.g. formula, allergies...)", saveNotes: "Save Notes" }, waitlist: { title: "Waitlist", empty: "Waitlist is empty.", notifyBtn: "Notify Client", removeBtn: "Remove" }, requests: { pending: "Pending Requests", noPending: "No new requests.", services: "Services:", refImage: "Reference Image:", confirmBtn: "Confirm", rejectBtn: "Reject", reschedule: "Reschedule (New Proposal)", proposeBtn: "Propose", confirmed: "Confirmed & History", notesPlaceholder: "Internal Notes (e.g. Skin fade #1...)", saveNote: "Save Note", cancelBtn: "Cancel", move: "Move:", proposeClientBtn: "Propose to Client", status: "Status", resendBtn: "Resend Confirm" }, services: { addTitle: "Add Service", nameDe: "Service Name (German)", nameEn: "Name (English Preview)", price: "Price (€)", duration: "Duration (Min)", saveBtn: "Save to Database", deleteBtn: "Delete", translateBtn: "✨ AI: Translate to English", translating: "Translating..." }, products: { addTitle: "Add Product", nameDe: "Product Name (German)", descDe: "Description (German)", nameEn: "Name (English Preview)", descEn: "Description (English Preview)", price: "Price (€)", initialStock: "Initial Stock", uploadImg: "Upload Product Image", saveBtn: "Save Product", stockLabel: "Stock" } },
     alertsMsg: { confirmed1: "Your appointment on", confirmed2: "has been confirmed!", cancelled1: "Your appointment on", cancelled2: "has been cancelled.", proposed1: "New appointment proposal:", proposed2: "Please confirm!" }
   }
 };
@@ -114,12 +122,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAdminAuth, setIsAdminAuth] = useState(false);
+  const [usersDB, setUsersDB] = useState<UserProfile[]>([]);
   
   const [servicesDB, setServicesDB] = useState<ServiceItem[]>([]);
   const [productsDB, setProductsDB] = useState<ProductItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  
+  // Phase 3 Waitlist State
+  const [waitlist, setWaitlist] = useState<WaitlistItem[]>([]);
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'rick.maity07@gmail.com';
   
@@ -245,6 +257,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Securely scoped Admin-only listeners
+  useEffect(() => {
+    let unsubUsersDB: (() => void) | null = null;
+    let unsubWaitlist: (() => void) | null = null;
+    
+    if (isAdminAuth) {
+      unsubUsersDB = onSnapshot(collection(db, 'users'), (snap) => {
+        setUsersDB(snap.docs.map(d => ({ ...d.data() } as UserProfile)));
+      });
+      unsubWaitlist = onSnapshot(collection(db, 'waitlist'), (snap) => {
+        setWaitlist(snap.docs.map(d => ({ id: d.id, ...d.data() } as WaitlistItem)));
+      });
+    } else {
+      setUsersDB([]);
+      setWaitlist([]);
+    }
+    
+    return () => { 
+      if (unsubUsersDB) unsubUsersDB(); 
+      if (unsubWaitlist) unsubWaitlist();
+    };
+  }, [isAdminAuth]);
+
   const changeLanguage = async (newLang: string) => {
     if (newLang === lang) return;
     if (newLang === 'de' || translations[newLang]) {
@@ -292,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let isBooked = false;
       if (stylist && stylist !== 'Egal (Wer frei ist)' && stylist !== 'Any') {
         isBooked = appointments.some(a => {
-          if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
+          if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed' && a.status !== 'blocked')) return false;
           if (a.stylist !== stylist && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
           
           const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
@@ -307,7 +342,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         let overlaps = 0;
         realStylists.forEach(sName => {
           const sBooked = appointments.some(a => {
-            if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed')) return false;
+            if (a.date !== date || (a.status !== 'confirmed' && a.status !== 'pending' && a.status !== 'proposed' && a.status !== 'blocked')) return false;
             if (a.stylist !== sName && a.stylist !== 'Egal (Wer frei ist)' && a.stylist !== 'Any') return false;
             
             const aStart = (a.status === 'proposed' && a.proposedTime) ? timeToMins(a.proposedTime) : timeToMins(a.time);
@@ -376,6 +411,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addNotification("Passwort erfolgreich aktualisiert!", "success");
   };
 
+  const updateUserNotes = async (id: string, notes: string) => {
+    if (!isAdminAuth) return;
+    await updateDoc(doc(db, 'users', id), { stylistNotes: notes });
+    addNotification("Stylisten-Notizen gespeichert!", "success");
+  };
+
   const updateTranslation = async (l: Language, section: string, key: string, val: string) => {
     if (!isAdminAuth) return;
     await updateDoc(doc(db, 'settings', 'translations'), { [`${l}.${section}.${key}`]: val });
@@ -388,10 +429,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (uEmail) {
         fetch('/api/email', { method: 'POST', headers, body: JSON.stringify({ email: uEmail, subject: uSubj, message: uMsg }) }).catch(()=>{});
       }
-      fetch('/api/email', { method: 'POST', headers, body: JSON.stringify({ email: adminEmail, subject: aSubj, message: aMsg }) }).catch(()=>{});
+      if (aSubj && aMsg) {
+        fetch('/api/email', { method: 'POST', headers, body: JSON.stringify({ email: adminEmail, subject: aSubj, message: aMsg }) }).catch(()=>{});
+      }
     } catch (e) {
       console.error("Dual Email Execution Failed", e);
     }
+  };
+
+  // Phase 3 Waitlist Actions
+  const addToWaitlist = async (item: Omit<WaitlistItem, 'id' | 'createdAt'>) => {
+    await addDoc(collection(db, 'waitlist'), { ...item, createdAt: Date.now() });
+    addNotification("Auf die Warteliste gesetzt!", 'success');
+  };
+
+  const removeFromWaitlist = async (id: string) => {
+    await deleteDoc(doc(db, 'waitlist', id));
+    addNotification("Von Warteliste entfernt.", 'info');
+  };
+
+  const notifyWaitlist = async (item: WaitlistItem) => {
+    if (item.phone) {
+      const cleanPhone = item.phone.replace(/\s+/g, '');
+      fetch('/api/sms', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ phone: cleanPhone, message: `Rebo Salon: Ein Termin am ${item.date} bei ${item.stylist} ist freigeworden! Buche jetzt online.` }) }).catch(()=>{});
+    }
+    const userDoc = await getDoc(doc(db, 'users', item.userId));
+    const userEmail = userDoc.exists() ? userDoc.data().email : null;
+    if (userEmail) {
+      await sendDualEmail(
+        userEmail,
+        "Rebo Salon: Warteliste Update - Freier Termin!",
+        `Hallo ${item.name},\n\nGute Neuigkeiten! Ein Termin am ${item.date} bei ${item.stylist} ist gerade freigeworden.\n\nBitte besuche unsere Webseite, um ihn direkt zu buchen, bevor er weg ist!\n\nDein Rebo Salon Team`,
+        "", ""
+      );
+    }
+    addNotification("Kunde benachrichtigt!", 'success');
+  };
+
+  const resendConfirmation = async (id: string) => {
+    const appt = appointments.find(a => a.id === id);
+    if (!appt || appt.status !== 'confirmed') return;
+    const userDoc = await getDoc(doc(db, 'users', appt.userId));
+    const userEmail = userDoc.exists() ? userDoc.data().email : null;
+    
+    if (appt.sendsms && appt.phone) {
+      const cleanPhone = appt.phone.replace(/\s+/g, '');
+      fetch('/api/sms', { method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ phone: cleanPhone, message: `Rebo Salon (Erinnerung): Dein Termin am ${appt.date} um ${appt.time} Uhr ist bestätigt!` }) }).catch(()=>{});
+    }
+    
+    await sendDualEmail(
+      userEmail,
+      "Rebo Salon: Terminbestätigung (Erneut gesendet)",
+      `Hallo ${appt.name},\n\nDies ist eine Erinnerung an deinen bestätigten Termin am ${appt.date} um ${appt.time} Uhr bei ${appt.stylist}.\n\nWir freuen uns auf dich.\nRebo Salon`,
+      "", ""
+    );
+    addNotification("Bestätigung erfolgreich erneut gesendet!", 'success');
+  };
+
+  const addAdminAppointment = async (appt: Omit<Appointment, 'id'>) => {
+    if (!isAdminAuth) return;
+    await addDoc(collection(db, 'appointments'), appt);
+    addNotification("Gespeichert!", 'success');
   };
 
   const addAppointment = async (appt: Omit<Appointment, 'id'>): Promise<DocumentReference | undefined> => {
@@ -433,6 +531,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     
     await updateDoc(doc(db, 'appointments', id), updates);
+
+    if (appt.status === 'blocked' || status === 'blocked' || appt.userId === 'walk-in' || appt.userId === 'block') {
+      addNotification("Status aktualisiert (Gesperrt/Walk-In).", 'success');
+      return;
+    }
 
     if (status === 'cancelled' && appt.status !== 'cancelled') {
       const userRef = doc(db, 'users', appt.userId);
@@ -498,17 +601,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addService = async (s: Omit<ServiceItem, 'id'>) => { await addDoc(collection(db, 'services'), s); addNotification("Added!", 'success'); };
   const deleteService = async (id: string) => { await deleteDoc(doc(db, 'services', id)); addNotification("Deleted.", 'info'); };
+  
   const addProduct = async (p: Omit<ProductItem, 'id'>) => { await addDoc(collection(db, 'products'), p); addNotification("Added!", 'success'); };
   const deleteProduct = async (id: string) => { await deleteDoc(doc(db, 'products', id)); addNotification("Deleted.", 'info'); };
+  
+  const updateProductStock = async (id: string, newStock: number) => {
+    if (!isAdminAuth) return;
+    await updateDoc(doc(db, 'products', id), { stockCount: newStock });
+  };
 
   const t = translations[lang] || fallbackTranslations[lang] || fallbackTranslations.de;
 
   return (
     <AppContext.Provider value={{ 
       lang, setLang, changeLanguage, isTranslatingUI, page, setPage: setPageRouter, t, updateTranslation,
-      isAdminAuth, currentUser, loginOAuth, loginEmail, registerEmail, resetPassword, updateUserPassword, logout,
-      servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct,
-      appointments, addAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots,
+      isAdminAuth, currentUser, usersDB, updateUserNotes, loginOAuth, loginEmail, registerEmail, resetPassword, updateUserPassword, logout,
+      servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock,
+      appointments, addAppointment, addAdminAppointment, updateAppointmentStatus, notifications, addNotification, getAvailableSlots,
+      waitlist, addToWaitlist, removeFromWaitlist, notifyWaitlist, resendConfirmation,
       alerts, markAlertRead, clearAlerts
     }}>
       {children}

@@ -10,7 +10,7 @@ import { DeleteAccountButton, AccountDeletionModal } from '@/components/AccountD
 import { ProfileView } from '@/components/ProfileView';
 import { Navbar } from '@/components/Navbar';
 import { getInternalHeaders } from '@/lib/validation';
-import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot } from '@/context/AppContext';
+import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot, UserProfile, WaitlistItem } from '@/context/AppContext';
 
 const countryCodes = [
   { code: '+49', label: 'Deutschland 🇩🇪' }, { code: '+43', label: 'Österreich 🇦🇹' }, { code: '+41', label: 'Schweiz 🇨🇭' },
@@ -382,7 +382,7 @@ function ProfileViewLocal() {
     <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500 pb-20 relative">
       
       {showForcePasswordModal && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
           <div className="p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 bg-[#111] border-white/20">
             <h3 className="text-2xl font-bold mb-2 uppercase text-red-400">{secTrans.title}</h3>
             <p className="text-gray-400 text-sm mb-6 leading-relaxed">{secTrans.desc}</p>
@@ -585,9 +585,11 @@ function ProfileViewLocal() {
 
 // --- ADMIN DASHBOARD (CRUD & CALENDAR) ---
 function AdminView() {
-  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, t } = useApp();
-  const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products'>('appointments');
+  const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock, t, usersDB, updateUserNotes, addAdminAppointment, waitlist, notifyWaitlist, removeFromWaitlist, resendConfirmation } = useApp();
+  const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products' | 'clients' | 'waitlist'>('appointments');
   const [editingNotes, setEditingNotes] = useState<{[key:string]: string}>({});
+  const [editingClientNotes, setEditingClientNotes] = useState<{[key:string]: string}>({});
+  const [searchClient, setSearchClient] = useState('');
   
   // Reschedule State for Admin
   const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
@@ -609,14 +611,40 @@ function AdminView() {
   const [productDescDe, setProductDescDe] = useState('');
   const [productDescEn, setProductDescEn] = useState('');
   const [productPrice, setProductPrice] = useState('');
+  const [productStock, setProductStock] = useState('10'); // New Stock State
   const [productImage, setProductImage] = useState<File | null>(null);
   const [isTranslatingProduct, setIsTranslatingProduct] = useState(false);
+
+  // Walk-In Modal State
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInTime, setWalkInTime] = useState('');
+  const [walkInName, setWalkInName] = useState('');
+  const [walkInService, setWalkInService] = useState('Walk-In');
+  const [walkInDuration, setWalkInDuration] = useState('60');
 
   const primaryColor = 'text-[#d4af37]';
   const bgBorder = 'border-white/10 bg-[#111]';
 
   const pendingAppts = appointments.filter((a: any) => a.status === 'pending').sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const otherAppts = appointments.filter((a: any) => a.status !== 'pending').sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Analytics Calculations
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todaysAppts = appointments.filter(a => a.date === todayDateStr && a.status !== 'blocked' && a.status !== 'cancelled');
+  const completedToday = todaysAppts.filter(a => a.status === 'confirmed').length;
+  const upcomingToday = todaysAppts.filter(a => a.status === 'pending' || a.status === 'proposed').length;
+  
+  let todayRevenue = 0;
+  todaysAppts.filter(a => a.status === 'confirmed').forEach(a => {
+     if (!Array.isArray(a.services)) return;
+     a.services.forEach(sName => {
+        const matchedService = servicesDB.find(s => s.name === sName || sName.includes(s.name.split(' / ')[0]));
+        if (matchedService) {
+           const priceNum = parseFloat(matchedService.price.replace(/[^0-9,.]/g, '').replace(',', '.'));
+           if (!isNaN(priceNum)) todayRevenue += priceNum;
+        }
+     });
+  });
 
   const shiftDate = (days: number) => {
      const d = new Date(calDate); d.setDate(d.getDate() + days);
@@ -664,20 +692,78 @@ function AdminView() {
     const finalName = productNameEn ? `${productNameDe} / ${productNameEn}` : productNameDe;
     const finalDesc = productDescEn ? `${productDescDe} / ${productDescEn}` : productDescDe;
     const imageUri = productImage ? URL.createObjectURL(productImage) : 'https://images.unsplash.com/photo-1599305090598-fe179d501227?w=800&q=80';
-    await addProduct({ name: finalName, price: productPrice, desc: finalDesc, image: imageUri });
-    setProductNameDe(''); setProductNameEn(''); setProductDescDe(''); setProductDescEn(''); setProductPrice(''); setProductImage(null);
+    await addProduct({ name: finalName, price: productPrice, desc: finalDesc, image: imageUri, stockCount: parseInt(productStock) || 0 });
+    setProductNameDe(''); setProductNameEn(''); setProductDescDe(''); setProductDescEn(''); setProductPrice(''); setProductStock('10'); setProductImage(null);
+  };
+
+  const handleSaveWalkIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetStylist = calendarStylist === 'Alle Stylisten' || calendarStylist === 'All Stylists' ? 'Egal (Wer frei ist)' : calendarStylist;
+    await addAdminAppointment({
+      userId: 'walk-in', name: walkInName, phone: 'Walk-In', services: [walkInService], totalDurationMins: parseInt(walkInDuration) || 60,
+      stylist: targetStylist, date: calDate, time: walkInTime, status: 'confirmed', sendsms: false, usedReward: false
+    } as any);
+    setShowWalkInModal(false); setWalkInName(''); setWalkInService('Walk-In'); setWalkInDuration('60');
   };
 
   return (
-    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20">
+    <div className="min-h-screen pt-28 md:pt-32 px-4 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-20 relative">
+      
+      {showWalkInModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="p-8 md:p-10 border rounded-sm shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300 bg-[#111] border-white/20">
+            <h3 className="text-2xl font-bold mb-6 uppercase text-[#d4af37]">{t.admin?.walkIn?.title || "Walk-In Hinzufügen"}</h3>
+            <form onSubmit={handleSaveWalkIn} className="space-y-4">
+               <div>
+                 <label className="block text-xs uppercase text-gray-400 mb-2">{t.admin?.walkIn?.name || "Kundenname"}</label>
+                 <input required type="text" value={walkInName} onChange={e=>setWalkInName(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.admin?.walkIn?.service || "Leistung"}</label>
+                   <input required type="text" value={walkInService} onChange={e=>setWalkInService(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                 </div>
+                 <div>
+                   <label className="block text-xs uppercase text-gray-400 mb-2">{t.admin?.walkIn?.duration || "Dauer (Min)"}</label>
+                   <input required type="number" value={walkInDuration} onChange={e=>setWalkInDuration(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
+                 </div>
+               </div>
+               <div className="flex gap-4 mt-8 pt-4">
+                  <button type="button" onClick={() => setShowWalkInModal(false)} className="flex-1 py-4 uppercase text-xs font-bold text-gray-400 border border-gray-700 hover:text-white rounded-sm transition-colors">{t.admin?.walkIn?.cancel || "Abbrechen"}</button>
+                  <button type="submit" className="flex-1 py-4 uppercase text-xs font-bold text-black rounded-sm transition-colors bg-[#d4af37] hover:bg-white">{t.admin?.walkIn?.saveBtn || "Speichern"}</button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 border-b border-gray-800 pb-4 gap-4">
         <h2 className={`text-2xl md:text-3xl font-bold uppercase tracking-widest ${primaryColor}`}>{t.admin?.title || 'Admin Control Panel'}</h2>
+        <button onClick={() => { setWalkInTime('12:00'); setShowWalkInModal(true); }} className="bg-[#d4af37] text-black px-4 py-2 font-bold uppercase text-xs rounded-sm tracking-widest hover:bg-white transition-colors">{t.admin?.walkIn?.btn || '+ Walk-In'}</button>
+      </div>
+
+      {/* PHASE 2: Analytics Dashboard */}
+      <div className="grid grid-cols-3 gap-3 md:gap-4 mb-8">
+         <div className="p-4 md:p-5 border border-white/10 rounded-sm bg-black/40">
+            <p className="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest">{t.admin?.analytics?.revenue || 'Umsatz Heute'}</p>
+            <p className={`text-xl md:text-2xl font-bold mt-1 ${primaryColor}`}>{todayRevenue.toFixed(2).replace('.', ',')} €</p>
+         </div>
+         <div className="p-4 md:p-5 border border-white/10 rounded-sm bg-black/40">
+            <p className="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest">{t.admin?.analytics?.completed || 'Bestätigt (Heute)'}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1 text-white">{completedToday}</p>
+         </div>
+         <div className="p-4 md:p-5 border border-white/10 rounded-sm bg-black/40">
+            <p className="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest">{t.admin?.analytics?.upcoming || 'Ausstehend (Heute)'}</p>
+            <p className="text-xl md:text-2xl font-bold mt-1 text-white">{upcomingToday}</p>
+         </div>
       </div>
 
       <div className="flex gap-2 md:gap-4 mb-8 overflow-x-auto pb-2 custom-scrollbar">
         {[
           { id: 'appointments', label: t.admin?.tabs?.requests || 'Anfragen' },
           { id: 'calendar', label: t.admin?.tabs?.calendar || 'Kalender' },
+          { id: 'clients', label: t.admin?.tabs?.clients || 'Kunden' },
+          { id: 'waitlist', label: t.admin?.tabs?.waitlist || 'Warteliste' }, // Phase 3 Waitlist Tab
           { id: 'services', label: t.admin?.tabs?.services || 'Leistungen' },
           { id: 'products', label: t.admin?.tabs?.products || 'Produkte' }
         ].map((tb) => (
@@ -686,6 +772,59 @@ function AdminView() {
           </button>
         ))}
       </div>
+
+      {/* PHASE 3: Waitlist Tab View */}
+      {tab === 'waitlist' && (
+        <div className={`p-6 border rounded-sm ${bgBorder}`}>
+          <h3 className="text-lg font-bold mb-6">{t.admin?.waitlist?.title || 'Warteliste'}</h3>
+          <div className="space-y-4">
+            {waitlist.length === 0 ? <p className="text-gray-500 text-sm">{t.admin?.waitlist?.empty || 'Warteliste ist leer.'}</p> : 
+              waitlist.sort((a,b) => b.createdAt - a.createdAt).map(w => (
+                <div key={w.id} className="p-5 border border-white/10 rounded-sm bg-black/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <p className="font-bold text-[#d4af37] text-lg">{w.name} <span className="text-sm text-gray-400 font-normal">({w.phone})</span></p>
+                    <p className="text-sm text-white mt-1">Wunschdatum: {w.date} • Stylist: {w.stylist}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Eingetragen am: {new Date(w.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                    <button onClick={() => notifyWaitlist(w)} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-xs font-bold uppercase rounded-sm transition-colors w-full md:w-auto">{t.admin?.waitlist?.notifyBtn || 'Kunde Benachrichtigen'}</button>
+                    <button onClick={() => removeFromWaitlist(w.id)} className="border border-red-600 text-red-400 hover:bg-red-600 hover:text-white px-4 py-2 text-xs font-bold uppercase rounded-sm transition-colors w-full md:w-auto">{t.admin?.waitlist?.removeBtn || 'Entfernen'}</button>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+
+      {tab === 'clients' && (
+        <div className={`p-6 border rounded-sm ${bgBorder}`}>
+           <div className="mb-6">
+             <input type="text" placeholder={t.admin?.clients?.search || 'Kunde nach Name oder Telefon suchen...'} onChange={(e) => setSearchClient(e.target.value)} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white text-sm" />
+           </div>
+           <div className="space-y-4">
+             {/* THE FILTER FIX IS APPLIED HERE */}
+             {usersDB.filter(u => (u.name || '').toLowerCase().includes((searchClient || '').toLowerCase()) || (u.phone || '').includes(searchClient)).map(u => (
+                <div key={u.id} className="p-5 border border-white/10 rounded-sm bg-black/40">
+                   <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="font-bold text-lg text-[#d4af37]">{u.name}</p>
+                        <p className="text-sm text-gray-400">{u.email} • {u.phone || 'Keine Nummer'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Treuepunkte</p>
+                        <p className="font-bold text-xl">{u.haircutCount}</p>
+                      </div>
+                   </div>
+                   <div className="flex gap-3 mt-4 pt-4 border-t border-white/5">
+                     <textarea value={editingClientNotes[`user_${u.id}`] !== undefined ? editingClientNotes[`user_${u.id}`] : (u.stylistNotes || '')} onChange={(e) => setEditingClientNotes({...editingClientNotes, [`user_${u.id}`]: e.target.value})} placeholder={t.admin?.clients?.notes || 'Stylisten-Notizen (z.B. Haarfarbe, Formel...)'} rows={2} className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
+                     <button onClick={() => updateUserNotes(u.id, editingClientNotes[`user_${u.id}`] !== undefined ? editingClientNotes[`user_${u.id}`] : (u.stylistNotes || ''))} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-white/10 hover:bg-[#d4af37] hover:text-black text-white transition-colors">{t.admin?.clients?.saveNotes || 'Speichern'}</button>
+                   </div>
+                </div>
+             ))}
+           </div>
+        </div>
+      )}
 
       {tab === 'calendar' && (
         <div className={`p-6 border rounded-sm ${bgBorder}`}>
@@ -722,8 +861,25 @@ function AdminView() {
                         <p className={`font-bold text-lg ${primaryColor}`}>{slot.time}</p>
                      </div>
                      <div className="flex-1 space-y-2">
-                        {apptsInSlot.length === 0 ? <p className="text-gray-600 text-sm italic pt-1">{t.admin?.calendar?.freeSlot || 'Freier Slot'}</p> : null}
+                        {apptsInSlot.length === 0 ? (
+                           <div className="flex justify-between items-center w-full pt-1">
+                              <p className="text-gray-600 text-sm italic">{t.admin?.calendar?.freeSlot || 'Freier Slot'}</p>
+                              <div className="flex gap-2">
+                                <button onClick={() => { setWalkInTime(slot.time); setShowWalkInModal(true); }} className="text-[#d4af37] hover:text-white text-[10px] uppercase border border-[#d4af37]/30 px-2 py-1 rounded-sm transition-colors">{t.admin?.walkIn?.btn || '+ Walk-In'}</button>
+                                <button onClick={() => addAdminAppointment({ userId: 'block', name: 'GESPERRT', phone: '-', services: ['Block'], totalDurationMins: 60, stylist: calendarStylist === 'Alle Stylisten' || calendarStylist === 'All Stylists' ? 'Egal (Wer frei ist)' : calendarStylist, date: calDate, time: slot.time, status: 'blocked', sendsms: false, usedReward: false } as any)} className="text-gray-500 hover:text-white text-[10px] uppercase border border-gray-700 px-2 py-1 rounded-sm transition-colors">{t.admin?.calendar?.blockBtn || 'Blockieren'}</button>
+                              </div>
+                           </div>
+                        ) : null}
+                        
                         {apptsInSlot.map((a: any) => {
+                           if (a.status === 'blocked') {
+                             return (
+                               <div key={a.id} className="p-4 border border-gray-600/50 bg-gray-800/30 rounded-sm flex justify-between items-center">
+                                  <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Gesperrt / Blocked</span>
+                                  <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="text-red-400 text-[10px] uppercase hover:underline font-bold tracking-widest">{t.admin?.calendar?.unblockBtn || 'Freigeben'}</button>
+                               </div>
+                             );
+                           }
                            const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                            return (
                               <div key={a.id} className={`p-4 border rounded-sm ${a.status === 'confirmed' ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
@@ -808,12 +964,15 @@ function AdminView() {
                      
                      {a.status === 'confirmed' && (
                       <div className="mt-4 pt-4 border-t border-gray-800 space-y-4">
-                        <div className="flex gap-3">
-                          <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder={t.admin?.requests?.notesPlaceholder || 'Interne Notizen (z.B. Skin fade #1...)'} className="flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
-                          <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-[#d4af37] text-black">{t.admin?.requests?.saveNote || 'Notiz speichern'}</button>
+                        <div className="flex flex-wrap md:flex-nowrap gap-3">
+                          <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder={t.admin?.requests?.notesPlaceholder || 'Interne Notizen (z.B. Skin fade #1...)'} className="w-full md:w-auto flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
+                          <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-[#d4af37] text-black">{t.admin?.requests?.saveNote || 'Notiz speichern'}</button>
                           
+                          {/* Phase 3: Resend Confirmation Button */}
+                          <button onClick={() => resendConfirmation(a.id)} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-blue-600/20 text-blue-400 border border-blue-600 hover:bg-blue-600 hover:text-white transition-colors">{t.admin?.requests?.resendBtn || 'Bestätigung neu senden'}</button>
+
                           {/* OVERRIDE CANCELLATION FOR CONFIRMED APPTS */}
-                          <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="px-6 py-3 font-bold uppercase text-xs rounded-sm bg-red-600/20 text-red-400 border border-red-600 hover:bg-red-600 hover:text-white transition-colors">{t.admin?.requests?.cancelBtn || 'Stornieren'}</button>
+                          <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-red-600/20 text-red-400 border border-red-600 hover:bg-red-600 hover:text-white transition-colors">{t.admin?.requests?.cancelBtn || 'Stornieren'}</button>
                         </div>
                         
                         {/* OVERRIDE RESCHEDULE FOR CONFIRMED APPTS */}
@@ -903,9 +1062,16 @@ function AdminView() {
                 <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.descEn || 'Beschreibung (Englische Vorschau)'}</label>
                 <textarea value={productDescEn} onChange={e => setProductDescEn(e.target.value)} rows={2} placeholder="e.g. Strong hold for all day" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
               </div>
-              <div>
-                <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.price || 'Preis (€)'}</label>
-                <input required value={productPrice} onChange={e => setProductPrice(e.target.value)} type="text" placeholder="19,90 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.price || 'Preis (€)'}</label>
+                  <input required value={productPrice} onChange={e => setProductPrice(e.target.value)} type="text" placeholder="19,90 €" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+                </div>
+                {/* PHASE 2: New Stock Input field */}
+                <div>
+                  <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.products?.initialStock || 'Anfangsbestand'}</label>
+                  <input required value={productStock} onChange={e => setProductStock(e.target.value)} type="number" placeholder="10" className="w-full bg-black border border-white/20 p-3 rounded-sm outline-none text-sm text-white" />
+                </div>
               </div>
               <div>
                  <label className="block text-xs text-gray-400 mb-1 uppercase">{t.admin?.products?.uploadImg || 'Produktbild hochladen'}</label>
@@ -919,9 +1085,19 @@ function AdminView() {
               <div key={p.id} className={`p-4 flex justify-between items-center border rounded-sm ${bgBorder}`}>
                 <div className="flex items-center gap-4">
                   <img src={p.image} alt={p.name} className="w-12 h-12 object-cover rounded-sm" />
-                  <span className="text-sm md:text-base font-medium">{p.name}</span>
+                  <div>
+                    <span className="text-sm md:text-base font-bold">{p.name}</span>
+                    <p className="text-xs text-gray-400">{p.price}</p>
+                  </div>
                 </div>
-                <button onClick={() => deleteProduct(p.id)} className="text-red-400 text-xs uppercase font-bold hover:underline">{t.admin?.services?.deleteBtn || 'Löschen'}</button>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-2 bg-black border border-white/10 p-1 rounded-sm">
+                    <button onClick={() => updateProductStock(p.id, Math.max(0, (p.stockCount || 0) - 1))} className="w-6 h-6 flex items-center justify-center border border-white/10 hover:bg-white/10 rounded-sm">-</button>
+                    <span className="text-xs font-bold w-6 text-center">{p.stockCount || 0}</span>
+                    <button onClick={() => updateProductStock(p.id, (p.stockCount || 0) + 1)} className="w-6 h-6 flex items-center justify-center border border-white/10 hover:bg-white/10 rounded-sm">+</button>
+                  </div>
+                  <button onClick={() => deleteProduct(p.id)} className="text-red-400 text-[10px] uppercase tracking-widest font-bold hover:underline">{t.admin?.services?.deleteBtn || 'Löschen'}</button>
+                </div>
               </div>
             ))}
           </div>
@@ -933,7 +1109,7 @@ function AdminView() {
 
 // --- PUBLIC BOOKING VIEW ---
 function BookingView() {
-  const { t, currentUser, addAppointment, servicesDB, getAvailableSlots, addNotification } = useApp();
+  const { t, currentUser, addAppointment, servicesDB, getAvailableSlots, addNotification, addToWaitlist } = useApp();
   const addAppointmentTyped = addAppointment as (appt: Omit<Appointment, 'id'>) => Promise<import('firebase/firestore').DocumentReference | undefined>;
   const [submitted, setSubmitted] = useState(false);
   
@@ -1136,14 +1312,26 @@ function BookingView() {
                   <input required type="date" value={bookingDate} onChange={e=>{setBookingDate(e.target.value); setSelectedSlot("");}} className="sm:w-[40%] bg-black border border-white/20 p-4 rounded-sm text-white" />
                   
                   {bookingDate ? (
-                    <div className="grid grid-cols-3 gap-2 flex-1">
-                      {openSlots.map((slot: TimeSlot) => (
-                        <button key={slot.id} type="button" disabled={slot.isBooked} onClick={() => setSelectedSlot(slot.id)}
-                          className={`py-3 rounded-sm border text-xs font-bold transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed' : selectedSlot === slot.id ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'border-white/20 text-gray-300 hover:bg-white/5'}`}
-                        >
-                          {slot.time}
-                        </button>
-                      ))}
+                    <div className="flex flex-col flex-1 gap-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        {openSlots.map((slot: TimeSlot) => (
+                          <button key={slot.id} type="button" disabled={slot.isBooked} onClick={() => setSelectedSlot(slot.id)}
+                            className={`py-3 rounded-sm border text-xs font-bold transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed' : selectedSlot === slot.id ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'border-white/20 text-gray-300 hover:bg-white/5'}`}
+                          >
+                            {slot.time}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      {/* Phase 3 Waitlist Button */}
+                      <div className="p-4 border border-white/10 bg-black/40 rounded-sm text-center">
+                        <p className="text-xs text-gray-400 mb-2">{t.booking?.waitlistLabel || "Kein passender Termin?"}</p>
+                        <button type="button" onClick={async () => {
+                          if(!currentUser || !bookingName || !phoneInput) return addNotification("Bitte füllen Sie Name und Telefon aus.", "error");
+                          const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
+                          await addToWaitlist({ userId: currentUser.id, name: bookingName, phone: fullPhone, date: bookingDate, stylist });
+                        }} className="w-full px-4 py-3 border border-[#d4af37] text-[#d4af37] text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-[#d4af37] hover:text-black transition-colors">{t.booking?.joinWaitlistBtn || "Warteliste beitreten"}</button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex-1 border border-dashed border-white/10 flex items-center justify-center p-4 rounded-sm"><p className="text-xs text-gray-500">{t.booking?.pickDateFirst || "Wählen Sie zuerst ein Datum."}</p></div>
@@ -1282,7 +1470,7 @@ function MainContent() {
               </div>
               <div className="flex-1 relative w-full group">
                 <div className="absolute inset-0 border-2 border-[#d4af37] translate-x-3 translate-y-3 rounded-sm" />
-                <img src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80" className="relative z-10 w-full h-auto rounded-sm object-cover aspect-4/3 grayscale-20" alt="Salon About Image" />
+                <img src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80" className="relative z-10 w-full h-auto rounded-sm object-cover aspect-[4/3] grayscale-20" alt="Salon About Image" />
               </div>
             </section>
           </div>
@@ -1320,7 +1508,7 @@ function MainContent() {
             <div className="text-center mb-12 pb-8">
                <h2 className="text-3xl md:text-5xl font-bold mb-2 uppercase tracking-tight">{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-18.75 md:auto-rows-37.5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[75px] md:auto-rows-[150px]">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -1347,7 +1535,7 @@ function MainContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
                 <div key={item.id} className="rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both bg-[#111] border border-white/10" style={{ animationDelay: `${idx * 150}ms` }}>
-                  <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
+                  <div className="w-full aspect-square md:aspect-[4/5] overflow-hidden bg-black/50 relative group">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
                   <div className="p-6 md:p-8 flex flex-col grow relative">
