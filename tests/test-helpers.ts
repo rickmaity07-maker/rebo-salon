@@ -1,5 +1,10 @@
 import { Page } from '@playwright/test';
 
+declare global {
+  interface Window {
+    firebase: any;
+  }
+}
 /**
  * Accept cookie consent banner if present
  * This banner blocks clicks on elements behind it
