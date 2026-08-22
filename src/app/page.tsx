@@ -10,7 +10,7 @@ import { DeleteAccountButton, AccountDeletionModal } from '@/components/AccountD
 import { ProfileView } from '@/components/ProfileView';
 import { Navbar } from '@/components/Navbar';
 import { getInternalHeaders } from '@/lib/validation';
-import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot, UserProfile, WaitlistItem, StylistItem } from '@/context/AppContext';
+import { AppProvider, useApp, Appointment, ServiceItem, ProductItem, fallbackTranslations, TimeSlot, UserProfile, WaitlistItem, StylistItem, Guest } from '@/context/AppContext';
 
 const countryCodes = [
   { code: '+49', label: 'Deutschland 🇩🇪' }, { code: '+43', label: 'Österreich 🇦🇹' }, { code: '+41', label: 'Schweiz 🇨🇭' },
@@ -583,7 +583,6 @@ function ProfileViewLocal() {
   );
 }
 
-// --- ADMIN DASHBOARD (CRUD & CALENDAR) ---
 function AdminView() {
   const { appointments, updateAppointmentStatus, servicesDB, addService, deleteService, productsDB, addProduct, deleteProduct, updateProductStock, t, usersDB, updateUserNotes, addAdminAppointment, waitlist, notifyWaitlist, removeFromWaitlist, resendConfirmation, stylistsDB, addStylist, deleteStylist, generalSettings, updateGeneralSettings } = useApp();
   const [tab, setTab] = useState<'appointments' | 'calendar' | 'services' | 'products' | 'clients' | 'waitlist' | 'team' | 'settings'>('appointments');
@@ -591,15 +590,10 @@ function AdminView() {
   const [editingClientNotes, setEditingClientNotes] = useState<{[key:string]: string}>({});
   const [searchClient, setSearchClient] = useState('');
   
-  // Reschedule State for Admin
   const [rescheduleData, setRescheduleData] = useState<{[key:string]: {date: string, time: string}}>({});
-  
   const [calDate, setCalDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Calendar Stylist Filter State
   const [calendarStylist, setCalendarStylist] = useState<string>('Alle Stylisten');
 
-  // AI Translation State
   const [serviceNameDe, setServiceNameDe] = useState('');
   const [serviceNameEn, setServiceNameEn] = useState('');
   const [servicePrice, setServicePrice] = useState('');
@@ -615,22 +609,33 @@ function AdminView() {
   const [productImage, setProductImage] = useState<File | null>(null);
   const [isTranslatingProduct, setIsTranslatingProduct] = useState(false);
 
-  // Walk-In Modal State
   const [showWalkInModal, setShowWalkInModal] = useState(false);
   const [walkInTime, setWalkInTime] = useState('');
   const [walkInName, setWalkInName] = useState('');
   const [walkInService, setWalkInService] = useState('Walk-In');
   const [walkInDuration, setWalkInDuration] = useState('60');
 
-  // Phase 4 Dynamic Admin States
   const [stylistName, setStylistName] = useState('');
   const [stylistServices, setStylistServices] = useState<string[]>([]);
   const [walkinWaitTimeInput, setWalkinWaitTimeInput] = useState('');
   const [holidayInput, setHolidayInput] = useState('');
+  
+  const [heroImageInput, setHeroImageInput] = useState('');
+  const [aboutImageInput, setAboutImageInput] = useState('');
+  const [aboutTitleDeInput, setAboutTitleDeInput] = useState('');
+  const [aboutTextDeInput, setAboutTextDeInput] = useState('');
+  const [aboutTitleEnInput, setAboutTitleEnInput] = useState('');
+  const [aboutTextEnInput, setAboutTextEnInput] = useState('');
 
   useEffect(() => {
      setWalkinWaitTimeInput(generalSettings?.walkinWaitTime || '');
-  }, [generalSettings?.walkinWaitTime]);
+     setHeroImageInput(generalSettings?.heroImage || '');
+     setAboutImageInput(generalSettings?.aboutImage || '');
+     setAboutTitleDeInput(generalSettings?.aboutTitleDe || '');
+     setAboutTextDeInput(generalSettings?.aboutTextDe || '');
+     setAboutTitleEnInput(generalSettings?.aboutTitleEn || '');
+     setAboutTextEnInput(generalSettings?.aboutTextEn || '');
+  }, [generalSettings]);
 
   const primaryColor = 'text-[#d4af37]';
   const bgBorder = 'border-white/10 bg-[#111]';
@@ -638,7 +643,6 @@ function AdminView() {
   const pendingAppts = appointments.filter((a: any) => a.status === 'pending').sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const otherAppts = appointments.filter((a: any) => a.status !== 'pending').sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Analytics Calculations
   const todayDateStr = new Date().toISOString().split('T')[0];
   const todaysAppts = appointments.filter(a => a.date === todayDateStr && a.status !== 'blocked' && a.status !== 'cancelled');
   const completedToday = todaysAppts.filter(a => a.status === 'confirmed').length;
@@ -722,6 +726,17 @@ function AdminView() {
     await addStylist({ name: stylistName, services: stylistServices });
     setStylistName('');
     setStylistServices([]);
+  };
+
+  const handleSaveDesign = () => {
+    updateGeneralSettings({
+      heroImage: heroImageInput,
+      aboutImage: aboutImageInput,
+      aboutTitleDe: aboutTitleDeInput,
+      aboutTextDe: aboutTextDeInput,
+      aboutTitleEn: aboutTitleEnInput,
+      aboutTextEn: aboutTextEnInput,
+    });
   };
 
   return (
@@ -867,6 +882,42 @@ function AdminView() {
                  </div>
               </div>
 
+              {/* Homepage Design Settings */}
+              <div className="border-t border-gray-800 pt-8 mt-8">
+                  <h4 className="text-md font-bold mb-4 text-[#d4af37]">{t.admin?.settings?.designTitle || 'Homepage Design & Texte'}</h4>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.heroImg || 'Hero Hintergrundbild (URL)'}</label>
+                          <input value={heroImageInput} onChange={e=>setHeroImageInput(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                      </div>
+                      <div>
+                          <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.aboutImg || 'Profilbild (URL)'}</label>
+                          <input value={aboutImageInput} onChange={e=>setAboutImageInput(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.aboutTitleDe || 'Titel (Deutsch)'}</label>
+                              <input value={aboutTitleDeInput} onChange={e=>setAboutTitleDeInput(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                          </div>
+                          <div>
+                              <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.aboutTitleEn || 'Titel (Englisch)'}</label>
+                              <input value={aboutTitleEnInput} onChange={e=>setAboutTitleEnInput(e.target.value)} type="text" className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                          </div>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.aboutTextDe || 'Beschreibung (Deutsch - max. 400 Zeichen)'}</label>
+                              <textarea maxLength={400} value={aboutTextDeInput} onChange={e=>setAboutTextDeInput(e.target.value)} rows={4} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                          </div>
+                          <div>
+                              <label className="block text-xs uppercase text-gray-400 mb-1">{t.admin?.settings?.aboutTextEn || 'Beschreibung (Englisch - max. 400 Zeichen)'}</label>
+                              <textarea maxLength={400} value={aboutTextEnInput} onChange={e=>setAboutTextEnInput(e.target.value)} rows={4} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-sm" />
+                          </div>
+                      </div>
+                      <button type="button" onClick={handleSaveDesign} className="w-full px-6 py-4 font-bold uppercase text-xs rounded-sm bg-white/10 text-white hover:bg-white hover:text-black transition-colors">{t.admin?.settings?.saveDesign || 'Design speichern'}</button>
+                  </div>
+              </div>
+
             </div>
           </div>
         )}
@@ -979,7 +1030,10 @@ function AdminView() {
                            const sList = Array.isArray(a.services) ? a.services.join(', ') : (a as any).service || 'Leistung';
                            return (
                               <div key={a.id} className={`p-4 border rounded-sm ${a.status === 'confirmed' ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
-                                 <p className="font-bold">{a.name} <span className="text-xs font-normal text-gray-400 ml-2">({a.phone})</span></p>
+                                 <p className="font-bold">
+                                   {a.name} <span className="text-xs font-normal text-gray-400 ml-2">({a.phone})</span>
+                                   {a.isGroup && <span className="ml-2 text-[10px] uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-sm">{t.admin?.requests?.groupBadge || "👥 Gruppe"}</span>}
+                                 </p>
                                  <p className="text-sm text-gray-300 mt-1">{sList} — {a.totalDurationMins || 60} {t.services?.min || 'Min'}</p>
                                  <span className="text-[10px] uppercase font-bold text-gray-500 mt-2 block">{t.booking?.stylist || 'Stylist'}: {a.stylist} • {t.admin?.requests?.status || 'Status'}: {a.status === 'confirmed' ? (t.profile?.completed || 'Abgeschlossen') : a.status === 'pending' ? (t.profile?.pending || 'Ausstehend') : a.status === 'cancelled' ? (t.profile?.cancel || 'Stornieren') : a.status}</span>
                               </div>
@@ -1008,9 +1062,25 @@ function AdminView() {
                   <div key={a.id} className="bg-black/80 p-5 border border-red-500/20 rounded-sm">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
+                        <p className="font-bold text-lg">
+                          {a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span>
+                          {a.isGroup && <span className="ml-2 text-[10px] uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-sm">{t.admin?.requests?.groupBadge || "👥 Gruppe"}</span>}
+                        </p>
                         <p className="text-sm text-gray-300 my-1"><span className="text-red-400 font-bold">{a.date} @ {a.time}</span> ({a.totalDurationMins || 60} {t.services?.min || 'Min'})</p>
                         <p className="text-sm text-gray-400">{t.admin?.requests?.services || 'Leistungen:'} {sList}</p>
+                        
+                        {a.guests && a.guests.length > 0 && (
+                          <div className="mt-3 p-3 bg-white/5 border border-white/10 rounded-sm">
+                            <p className="text-xs uppercase font-bold text-gray-500 mb-2">Weitere Personen ({a.guests.length})</p>
+                            {a.guests.map((g: any, i: number) => (
+                              <div key={i} className="text-sm text-gray-300 mb-2 last:mb-0">
+                                <span className="font-bold text-white">{g.name}</span> (Alter: {g.age}) {g.phone && `• Tel: ${g.phone}`} <br/>
+                                <span className="text-xs text-gray-400">Stylist: {g.stylist} • Service: {g.service}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {a.specialRequests && <p className="text-sm text-yellow-400 mt-2"><strong>Wünsche:</strong> {a.specialRequests}</p>}
                         {a.referenceImage && (
                           <div className="mt-3">
@@ -1050,9 +1120,25 @@ function AdminView() {
                   <div key={a.id} className="bg-black/50 p-5 border border-white/10 rounded-sm">
                      <div className="flex flex-col md:flex-row justify-between gap-4">
                        <div>
-                         <p className="font-bold text-lg">{a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span></p>
+                         <p className="font-bold text-lg">
+                           {a.name} <span className="text-sm font-normal text-gray-400">({a.phone})</span>
+                           {a.isGroup && <span className="ml-2 text-[10px] uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-sm">{t.admin?.requests?.groupBadge || "👥 Gruppe"}</span>}
+                         </p>
                          <p className="text-sm text-gray-300">{sList} — {a.date} @ {a.time}</p>
                          <p className={`text-xs mt-2 font-bold uppercase ${a.status==='confirmed'?'text-green-400':a.status==='cancelled'?'text-red-400':'text-blue-400'}`}>{t.admin?.requests?.status || 'Status'}: {a.status === 'confirmed' ? (t.profile?.completed || 'Abgeschlossen') : a.status === 'pending' ? (t.profile?.pending || 'Ausstehend') : a.status === 'cancelled' ? (t.profile?.cancel || 'Stornieren') : a.status}</p>
+                         
+                         {a.guests && a.guests.length > 0 && (
+                          <div className="mt-3 p-3 bg-white/5 border border-white/10 rounded-sm">
+                            <p className="text-xs uppercase font-bold text-gray-500 mb-2">Weitere Personen ({a.guests.length})</p>
+                            {a.guests.map((g: any, i: number) => (
+                              <div key={i} className="text-sm text-gray-300 mb-2 last:mb-0">
+                                <span className="font-bold text-white">{g.name}</span> (Alter: {g.age}) {g.phone && `• Tel: ${g.phone}`} <br/>
+                                <span className="text-xs text-gray-400">Stylist: {g.stylist} • Service: {g.service}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                          {a.specialRequests && <p className="text-sm text-yellow-400 mt-2"><strong>Wünsche:</strong> {a.specialRequests}</p>}
                        </div>
                        {a.referenceImage && <img src={a.referenceImage} alt="Ref" className="h-16 w-16 object-cover rounded-sm border border-white/10" />}
@@ -1064,14 +1150,11 @@ function AdminView() {
                           <input type="text" value={editingNotes[a.id] !== undefined ? editingNotes[a.id] : (a.notes || '')} onChange={(e) => setEditingNotes({...editingNotes, [a.id]: e.target.value})} placeholder={t.admin?.requests?.notesPlaceholder || 'Interne Notizen (z.B. Skin fade #1...)'} className="w-full md:w-auto flex-1 bg-black border border-white/20 p-3 rounded-sm text-sm text-white" />
                           <button onClick={() => updateAppointmentStatus(a.id, 'confirmed', false, editingNotes[a.id])} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-[#d4af37] text-black">{t.admin?.requests?.saveNote || 'Notiz speichern'}</button>
                           
-                          {/* Phase 3: Resend Confirmation Button */}
                           <button onClick={() => resendConfirmation(a.id)} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-blue-600/20 text-blue-400 border border-blue-600 hover:bg-blue-600 hover:text-white transition-colors">{t.admin?.requests?.resendBtn || 'Bestätigung neu senden'}</button>
 
-                          {/* OVERRIDE CANCELLATION FOR CONFIRMED APPTS */}
                           <button onClick={() => updateAppointmentStatus(a.id, 'cancelled', false)} className="w-full md:w-auto px-6 py-3 font-bold uppercase text-xs rounded-sm bg-red-600/20 text-red-400 border border-red-600 hover:bg-red-600 hover:text-white transition-colors">{t.admin?.requests?.cancelBtn || 'Stornieren'}</button>
                         </div>
                         
-                        {/* OVERRIDE RESCHEDULE FOR CONFIRMED APPTS */}
                         <div className="flex gap-2 items-center bg-white/5 p-3 rounded-sm border border-white/10">
                           <span className="text-xs uppercase text-gray-400 font-bold">{t.admin?.requests?.move || 'Verschieben:'}</span>
                           <input type="date" onChange={(e) => setRescheduleData({...rescheduleData, [a.id]: {...rescheduleData[a.id], date: e.target.value}})} className="bg-black border border-white/20 p-2 text-xs rounded-sm text-white flex-1" />
@@ -1219,6 +1302,10 @@ function BookingView() {
   const [specialRequests, setSpecialRequests] = useState("");
   const [refImageFile, setRefImageFile] = useState<File | null>(null);
   const [refImagePreview, setRefImagePreview] = useState<string | null>(null);
+
+  // Group Booking State
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [preferredTime, setPreferredTime] = useState("");
   
   const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMins || 60), 0);
   const openSlots = getAvailableSlots(bookingDate, stylist, totalDuration);
@@ -1274,9 +1361,28 @@ function BookingView() {
     setRefImagePreview(null);
   };
 
+  const addGuest = () => {
+    setGuests([...guests, { id: Date.now().toString(), name: '', age: '', phone: '', service: servicesDB[0]?.name || '', stylist: availableStylists[0] }]);
+  };
+
+  const removeGuest = (id: string) => {
+    setGuests(guests.filter(g => g.id !== id));
+  };
+
+  const updateGuest = (id: string, field: keyof Guest, value: string) => {
+    setGuests(guests.map(g => g.id === id ? { ...g, [field]: value } : g));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSlot || !currentUser || selectedServices.length === 0) return;
+    if (!currentUser || selectedServices.length === 0) return;
+    
+    // If it's a normal booking, ensure a slot is selected. If it's a group booking, ensure a preferred time is entered.
+    if (guests.length === 0 && !selectedSlot) return;
+    if (guests.length > 0 && !preferredTime) {
+      addNotification("Bitte Wunschuhrzeit angeben.", "error");
+      return;
+    }
 
     const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
     if (fullPhone !== currentUser.phone || bookingName !== currentUser.name) {
@@ -1290,11 +1396,13 @@ function BookingView() {
       totalDurationMins: totalDuration,
       stylist: stylist,
       date: bookingDate,
-      time: openSlots.find(s => s.id === selectedSlot)?.time || '00:00',
+      time: guests.length > 0 ? preferredTime : (openSlots.find(s => s.id === selectedSlot)?.time || '00:00'),
       status: 'pending',
       specialRequests: specialRequests,
       sendsms: true, usedReward: false, isEmergency: false,
-      referenceImage: ''
+      referenceImage: '',
+      isGroup: guests.length > 0,
+      guests: guests.length > 0 ? guests : []
     } as any);
 
     if (refImageFile && appointmentRef?.id) {
@@ -1309,6 +1417,8 @@ function BookingView() {
 
     clearImageUpload();
     setSpecialRequests("");
+    setGuests([]);
+    setPreferredTime("");
     setSubmitted(true);
   };
 
@@ -1405,37 +1515,97 @@ function BookingView() {
                   </div>
               </div>
 
+              {/* Group Booking Guests Expansion */}
+              <div className="pt-4 border-t border-gray-800">
+                 {guests.map((g, index) => (
+                    <div key={g.id} className="p-4 border border-white/10 bg-black/40 rounded-sm space-y-4 relative mb-4 animate-in fade-in">
+                       <button type="button" onClick={() => removeGuest(g.id)} className="absolute top-2 right-2 text-red-500 hover:text-red-400 text-xs font-bold px-2 py-1">✕</button>
+                       <p className="text-xs font-bold text-[#d4af37] uppercase tracking-widest">Person {index + 2}</p>
+                       
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] uppercase text-gray-500 mb-1">{t.booking?.guestName || "Name"}</label>
+                            <input required placeholder="Name" value={g.name} onChange={e => updateGuest(g.id, 'name', e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-xs" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-gray-500 mb-1">{t.booking?.guestAge || "Alter"}</label>
+                            <input required type="number" placeholder="Alter" value={g.age} onChange={e => updateGuest(g.id, 'age', e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-xs" />
+                          </div>
+                       </div>
+
+                       {parseInt(g.age) >= 14 && (
+                          <div>
+                             <label className="block text-[10px] uppercase text-gray-500 mb-1">{t.booking?.guestPhone || "Telefon (für ab 14 J.)"}</label>
+                             <input placeholder="Optional" value={g.phone} onChange={e => updateGuest(g.id, 'phone', e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-xs" />
+                          </div>
+                       )}
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] uppercase text-gray-500 mb-1">{t.booking.service}</label>
+                            <select value={g.service} onChange={e => updateGuest(g.id, 'service', e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-xs">
+                               <option value="" disabled>Service wählen</option>
+                               {servicesDB.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-gray-500 mb-1">{t.booking.stylist}</label>
+                            <select value={g.stylist} onChange={e => updateGuest(g.id, 'stylist', e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white text-xs">
+                               {availableStylists.map((opt: string, i: number) => <option key={i} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                       </div>
+                    </div>
+                 ))}
+                 
+                 <button type="button" onClick={addGuest} className="text-xs text-[#d4af37] font-bold uppercase hover:text-white transition-colors border border-[#d4af37]/30 border-dashed w-full py-3 rounded-sm bg-[#d4af37]/5">
+                   {t.booking?.addGuest || "+ Person / Kind hinzufügen"}
+                 </button>
+              </div>
+
               <div>
                 <label className="block text-xs uppercase text-gray-400 mb-2">{t.booking?.requestsLabel || "Besondere Wünsche / Notizen (Optional)"}</label>
                 <textarea value={specialRequests} onChange={e=>setSpecialRequests(e.target.value)} rows={2} className="w-full bg-black border border-white/20 p-4 rounded-sm text-white" />
               </div>
 
               <div>
-                <label className="block text-xs uppercase text-gray-400 mb-3">{t.booking.date} & {t.booking.time} *</label>
+                <label className="block text-xs uppercase text-gray-400 mb-3">{t.booking.date} {guests.length === 0 && `& ${t.booking.time}`} *</label>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <input required type="date" value={bookingDate} onChange={e=>{setBookingDate(e.target.value); setSelectedSlot("");}} className="sm:w-[40%] bg-black border border-white/20 p-4 rounded-sm text-white" />
                   
                   {bookingDate ? (
                     <div className="flex flex-col flex-1 gap-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        {openSlots.map((slot: TimeSlot) => (
-                          <button key={slot.id} type="button" disabled={slot.isBooked} onClick={() => setSelectedSlot(slot.id)}
-                            className={`py-3 rounded-sm border text-xs font-bold transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed' : selectedSlot === slot.id ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'border-white/20 text-gray-300 hover:bg-white/5'}`}
-                          >
-                            {slot.time}
-                          </button>
-                        ))}
-                      </div>
                       
-                      {/* Phase 3 Waitlist Button */}
-                      <div className="p-4 border border-white/10 bg-black/40 rounded-sm text-center">
-                        <p className="text-xs text-gray-400 mb-2">{t.booking?.waitlistLabel || "Kein passender Termin?"}</p>
-                        <button type="button" onClick={async () => {
-                          if(!currentUser || !bookingName || !phoneInput) return addNotification("Bitte füllen Sie Name und Telefon aus.", "error");
-                          const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
-                          await addToWaitlist({ userId: currentUser.id, name: bookingName, phone: fullPhone, date: bookingDate, stylist });
-                        }} className="w-full px-4 py-3 border border-[#d4af37] text-[#d4af37] text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-[#d4af37] hover:text-black transition-colors">{t.booking?.joinWaitlistBtn || "Warteliste beitreten"}</button>
-                      </div>
+                      {guests.length > 0 ? (
+                        <div className="p-4 border border-blue-500/30 bg-blue-500/10 rounded-sm animate-in fade-in">
+                          <p className="text-sm font-bold text-blue-400 mb-2">👥 Gruppenanfrage</p>
+                          <p className="text-xs text-gray-300 mb-4">{t.booking?.groupNotice || "Gruppenbuchungen werden manuell geprüft. Sende uns deine Wunschanfrage!"}</p>
+                          <label className="block text-[10px] uppercase text-gray-400 mb-1">{t.booking?.prefTime || "Wunschuhrzeit"}</label>
+                          <input required type="time" value={preferredTime} onChange={e => setPreferredTime(e.target.value)} className="w-full bg-black border border-white/20 p-3 rounded-sm text-white" />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {openSlots.map((slot: TimeSlot) => (
+                            <button key={slot.id} type="button" disabled={slot.isBooked} onClick={() => setSelectedSlot(slot.id)}
+                              className={`py-3 rounded-sm border text-xs font-bold transition-colors ${slot.isBooked ? 'opacity-20 cursor-not-allowed' : selectedSlot === slot.id ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'border-white/20 text-gray-300 hover:bg-white/5'}`}
+                            >
+                              {slot.time}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {guests.length === 0 && (
+                        <div className="p-4 border border-white/10 bg-black/40 rounded-sm text-center">
+                          <p className="text-xs text-gray-400 mb-2">{t.booking?.waitlistLabel || "Kein passender Termin?"}</p>
+                          <button type="button" onClick={async () => {
+                            if(!currentUser || !bookingName || !phoneInput) return addNotification("Bitte füllen Sie Name und Telefon aus.", "error");
+                            const fullPhone = `${countryCode}${phoneInput}`.replace(/\s+/g, '');
+                            await addToWaitlist({ userId: currentUser.id, name: bookingName, phone: fullPhone, date: bookingDate, stylist });
+                          }} className="w-full px-4 py-3 border border-[#d4af37] text-[#d4af37] text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-[#d4af37] hover:text-black transition-colors">{t.booking?.joinWaitlistBtn || "Warteliste beitreten"}</button>
+                        </div>
+                      )}
+
                     </div>
                   ) : (
                     <div className="flex-1 border border-dashed border-white/10 flex items-center justify-center p-4 rounded-sm"><p className="text-xs text-gray-500">{t.booking?.pickDateFirst || "Wählen Sie zuerst ein Datum."}</p></div>
@@ -1443,7 +1613,7 @@ function BookingView() {
                 </div>
               </div>
 
-              <button type="submit" disabled={!selectedSlot || selectedServices.length === 0} className="w-full py-4 rounded-sm font-bold uppercase tracking-widest text-sm transition-all mt-6 disabled:opacity-50 bg-[#d4af37] text-black">
+              <button type="submit" disabled={(guests.length === 0 && !selectedSlot) || selectedServices.length === 0} className="w-full py-4 rounded-sm font-bold uppercase tracking-widest text-sm transition-all mt-6 disabled:opacity-50 bg-[#d4af37] text-black">
                 {t.booking.submit}
               </button>
             </form>
@@ -1454,7 +1624,6 @@ function BookingView() {
   );
 }
 
-// --- PUBLIC CONTACT VIEW ---
 function ContactView() {
   const { t } = useApp();
 
@@ -1501,6 +1670,11 @@ function ContactView() {
                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/></svg>
                  </a>
 
+                 {/* FACEBOOK */}
+                 <a href="https://www.facebook.com/profile.php?id=61572606551232" target="_blank" rel="noopener noreferrer" className="w-14 h-14 flex items-center justify-center rounded-full border transition-all border-white/20 text-[#d4af37] hover:border-[#d4af37] hover:bg-[#d4af37] hover:text-black">
+                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                 </a>
+
                </div>
             </div>
           </div>
@@ -1523,7 +1697,7 @@ function ContactView() {
 
 // --- MAIN WRAPPER ---
 function MainContent() {
-  const { page, setPage, t, servicesDB, productsDB, currentUser, generalSettings } = useApp();
+  const { page, setPage, t, servicesDB, productsDB, currentUser, generalSettings, lang } = useApp();
 
   return (
     <div className="relative min-h-screen flex flex-col bg-[#0a0a0a] text-white">
@@ -1554,7 +1728,11 @@ function MainContent() {
               <div className="absolute inset-0 z-0">
                 <div className="absolute inset-0 bg-[#0a0a0a]/70 z-10" />
                 <div className="absolute inset-0 bg-linear-to-t from-[#0a0a0a] via-transparent to-transparent z-10" />
-                <img src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=1600&q=80" className="w-full h-full object-cover grayscale-30" alt="Salon Background" />
+                <img 
+                  src={generalSettings?.heroImage || "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=1600&q=80"} 
+                  className="w-full h-full object-cover grayscale-30" 
+                  alt="Salon Background" 
+                />
               </div>
               <div className="relative z-20 text-center max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-1000">
                 <span className="text-[#d4af37] text-xs md:text-sm font-bold tracking-[0.3em] uppercase mb-4 block">Est. Schweinfurt</span>
@@ -1566,15 +1744,26 @@ function MainContent() {
                 <button onClick={() => setPage('booking')} className="bg-[#d4af37] text-black px-8 md:px-10 py-3.5 md:py-4 font-bold uppercase tracking-widest text-xs md:text-sm hover:bg-white transition-all shadow-[0_0_30px_rgba(212,175,55,0.2)]">{t.nav.book}</button>
               </div>
             </section>
-            <section className="px-4 md:px-6 max-w-6xl mx-auto py-12 flex flex-col md:flex-row gap-10 md:gap-16 items-center">
-              <div className="flex-1">
-                <h2 className="text-2xl md:text-4xl font-bold uppercase tracking-wider mb-4">{t.about.title}</h2>
-                <div className="w-12 h-1 bg-[#d4af37] mb-6" />
-                <p className="text-gray-400 text-base md:text-lg leading-relaxed font-light">{t.about.text}</p>
+            
+            <section className="px-4 md:px-6 max-w-6xl mx-auto py-16 md:py-24 flex flex-col md:flex-row gap-12 md:gap-20 items-center">
+              <div className="flex-1 md:pr-8">
+                <h2 className="text-2xl md:text-4xl font-bold uppercase tracking-wider mb-4">
+                  {lang === 'de' ? (generalSettings?.aboutTitleDe || t.about.title) : (generalSettings?.aboutTitleEn || t.about.title)}
+                </h2>
+                <div className="w-12 h-1 bg-[#d4af37] mb-8" />
+                
+                <p className="text-gray-400 text-sm md:text-base lg:text-lg leading-relaxed font-light line-clamp-none md:line-clamp-[10]">
+                  {lang === 'de' ? (generalSettings?.aboutTextDe || t.about.text) : (generalSettings?.aboutTextEn || t.about.text)}
+                </p>
               </div>
-              <div className="flex-1 relative w-full group">
-                <div className="absolute inset-0 border-2 border-[#d4af37] translate-x-3 translate-y-3 rounded-sm" />
-                <img src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80" className="relative z-10 w-full h-auto rounded-sm object-cover aspect-4/3rayscale-20" alt="Salon About Image" />
+              
+              <div className="w-full md:w-[40%] relative group max-w-sm mx-auto md:mx-0">
+                <div className="absolute inset-0 border-2 border-[#d4af37] translate-x-4 translate-y-4 rounded-sm" />
+                <img 
+                  src={generalSettings?.aboutImage || "image_0200bf.jpg"} 
+                  className="relative z-10 w-full h-auto rounded-sm object-cover aspect-[3/4] grayscale-20" 
+                  alt="Salon About Image" 
+                />
               </div>
             </section>
           </div>
@@ -1612,7 +1801,7 @@ function MainContent() {
             <div className="text-center mb-12 pb-8">
                <h2 className="text-3xl md:text-5xl font-bold mb-2 uppercase tracking-tight">{t.gallery.title}</h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-18.75md:auto-rows-[150px]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[75px] md:auto-rows-[150px]">
               {t.gallery.images.map((src: string, idx: number) => {
                 let spanClass = "col-span-1 row-span-1";
                 let desktopSpan = "md:col-span-1 md:row-span-1";
@@ -1639,7 +1828,7 @@ function MainContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               {productsDB.map((item: ProductItem, idx: number) => (
                 <div key={item.id} className="rounded-sm flex flex-col justify-between h-full overflow-hidden shadow-xl animate-in fade-in slide-in-from-bottom-12 duration-700 fill-mode-both bg-[#111] border border-white/10" style={{ animationDelay: `${idx * 150}ms` }}>
-                  <div className="w-full aspect-square md:aspect-4/5 overflow-hidden bg-black/50 relative group">
+                  <div className="w-full aspect-square md:aspect-[4/5] overflow-hidden bg-black/50 relative group">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   </div>
                   <div className="p-6 md:p-8 flex flex-col grow relative">
